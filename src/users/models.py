@@ -37,9 +37,9 @@ class CustomUser(AbstractBaseUser):
 
     USERNAME_FIELD = "email"
 
-    object = CustomUserManager()
+    objects = CustomUserManager()
 
-    def has_perm(self, perm, obj=None):
+    def has_perms(self, perm, obj=None):
         return True
 
     def has_module_perms(self, app_label):
