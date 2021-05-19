@@ -7,11 +7,18 @@ from rest_framework.status import HTTP_201_CREATED
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_lessons(request):
-    return Response({"lessons": [{
-        "id": "ij3449dsnfksldfsd",
-        "title": "Title of an example lesson",
-        "category": "This is the category"
-    }]})
+    return Response({"lessons": [
+        {
+            "id": "ij3449dsnfksldfsd",
+            "title": "Title of an example lesson",
+            "category": "This is the category"
+        },
+        {
+            "id": "rgtyhryhdsnfdg4tfdv",
+            "title": "Title of an other example lesson",
+            "category": "This is the category"
+        }
+    ]})
 
 
 @api_view(['GET'])
@@ -32,7 +39,7 @@ def get_lesson(request, lesson_id: str):
                     "video": "video_url (gonna need to store the video locally)"
                 },
 
-        }
+            }
         },
         "quiz_id": "iamaquizid",
     }})
