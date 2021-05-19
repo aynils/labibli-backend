@@ -7,7 +7,11 @@ from rest_framework.response import Response
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_lessons(request):
-    return Response({"lessons": ["Hello, world!", "Second lesson"]})
+    return Response({"lessons": [{
+        "id": "ij3449dsnfksldfsd",
+        "title": "Title of an example lesson",
+        "category": "reclamation"
+    }]})
 
 
 @api_view(['GET'])
