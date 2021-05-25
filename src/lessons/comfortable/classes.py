@@ -7,7 +7,27 @@ from typing import List
 
 @dataclass
 class LessonSection:
+    "Mixin to be used by specific LessonSections"
     pass
+
+
+@dataclass
+class Choice:
+    index: str
+    value: str
+
+
+@dataclass
+class Question:
+    question: str
+    type: str
+    correct_answer: str
+    choices: List[Choice]
+
+
+@dataclass
+class Quiz:
+    questions: List[Question]
 
 
 @dataclass
@@ -24,6 +44,7 @@ class Lesson:
     description: str
     updated_at: datetime.datetime
     content: LessonContent
+    quiz: Quiz
 
 
 @dataclass
@@ -32,6 +53,7 @@ class LessonMeta:
     title: str
     description: str
     updated_at: datetime.datetime
+
 
 @dataclass
 class Collection:
@@ -42,6 +64,8 @@ class Collection:
 # Specific classes for each lesson type
 
 @dataclass
-class ReclamationSection(LessonSection):
+class EnvironmentSection(LessonSection):
     title: str
     video_url: str
+    description: str
+    updated_at: datetime.datetime
