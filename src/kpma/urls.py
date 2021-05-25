@@ -7,7 +7,7 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView
 )
 
-from lessons.views import get_lessons, get_lesson, get_quiz, post_picture
+from lessons.views import get_lessons, get_lesson, get_categories, post_picture
 from users.views import signup
 
 User = get_user_model()
@@ -17,9 +17,9 @@ urlpatterns = [
     path('account/', include('django.contrib.auth.urls')),
     path('account/signup', signup, name="signup"),
     path('api-auth/', include('rest_framework.urls')),
-    path('api/lessons/', get_lessons),
+    path('api/categories/', get_categories),
+    path('api/lessons/<str:category>', get_lessons),
     path('api/lesson/<str:lesson_id>', get_lesson),
-    path('api/quiz/<str:quiz_id>', get_quiz),
     path('api/picture/', post_picture),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
