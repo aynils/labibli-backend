@@ -18,3 +18,4 @@ markdown
 django-filter
 djangorestframework-simplejwt
 requests
+pillow
