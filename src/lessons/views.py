@@ -11,7 +11,7 @@ from lessons.comfortable import api
 
 CATEGORIES = [
     {
-        "id": "reclamation",
+        "id": "environment",
         "name": "Environment"
     },
     {

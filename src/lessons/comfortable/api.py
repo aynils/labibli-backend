@@ -32,6 +32,10 @@ def get_lessons(category: str) -> Collection:
         return collection
     else:
         print(f"ERROR - {response.status_code} - {response.json()}")
+        return Collection(
+            category=category,
+            lessons=[]
+        )
 
 
 def get_lesson(lesson_id: str) -> Lesson:
