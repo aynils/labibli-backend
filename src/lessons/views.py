@@ -30,20 +30,20 @@ CATEGORIES = [
 
 
 @api_view(['GET'])
-# @permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated])
 def get_lessons(request, category: str) -> Response:
     lessons = api.get_lessons(category=category)
     return Response(dataclasses.asdict(lessons))
 
 
 @api_view(['GET'])
-# @permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated])
 def get_lesson(request, lesson_id: str):
     lesson = api.get_lesson(lesson_id=lesson_id)
     return Response(dataclasses.asdict(lesson))
 
 @api_view(['GET'])
-# @permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated])
 def get_categories(request):
     return Response(
         {
@@ -53,7 +53,7 @@ def get_categories(request):
 
 
 @api_view(['POST'])
-# @permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated])
 def post_picture(request):
     if request.method == 'POST':
         form = UploadFileForm(request.POST, request.FILES)
