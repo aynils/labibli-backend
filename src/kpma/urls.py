@@ -9,6 +9,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from lessons.views import get_lessons, get_lesson, get_categories, post_picture
+from reports.views import post_report
 from users.views import signup
 from kpma.settings import MEDIA_ROOT, MEDIA_URL
 
@@ -23,6 +24,7 @@ urlpatterns = [
     path('api/lessons/<str:category>', get_lessons),
     path('api/lesson/<str:lesson_id>', get_lesson),
     path('api/picture/', post_picture),
+    path('api/report/', post_report),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),

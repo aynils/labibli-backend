@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     'users',
     'kpma',
     'lessons',
+    'reports',
     'rest_framework',
 ]
 

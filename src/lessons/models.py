@@ -8,6 +8,7 @@ class Picture(models.Model):
     user = models.ForeignKey(to=CustomUser, on_delete=models.DO_NOTHING)
     lesson_id = models.CharField(max_length=255)
     file = models.ImageField(upload_to='pictures')
+    created_at = models.DateTimeField(auto_now_add=True, blank=True)
 
     def image_tag(self):
         from django.utils.html import escape
