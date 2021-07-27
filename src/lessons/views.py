@@ -12,19 +12,15 @@ from lessons.comfortable import api
 CATEGORIES = [
     {
         "id": "environment",
-        "name": "Environment"
+        "name": "Earthworks & Reclamation"
     },
     {
         "id": "legal",
-        "name": "Legal"
+        "name": "Planning & Regulatory"
     },
     {
-        "id": "otherCategory",
-        "name": "Other Category"
-    },
-    {
-        "id": "category4",
-        "name": "Category 4"
+        "id": "community",
+        "name": "Community & Engagement"
     }
 ]
 
