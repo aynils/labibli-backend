@@ -109,12 +109,12 @@ def parse_quiz(raw_quiz) -> Quiz:
     for raw_question in raw_questions:
         answers = raw_question.split("\n")
         question = answers.pop(0)
-        correct_answer = ''
+        correct_answers = []
         choices = []
         for index, answer in zip(ALPHABET, answers):
             if answer.startswith('!'):
                 answer = answer[1:]
-                correct_answer = index
+                correct_answers.append(index)
             choice = Choice(
                 index=index,
                 value=answer
@@ -124,7 +124,7 @@ def parse_quiz(raw_quiz) -> Quiz:
         question = Question(
             question=question,
             type=DEFAULT_QUIZZ_TYPE,
-            correct_answer=correct_answer,
+            correct_answers=correct_answers,
             choices=choices,
         )
         questions.append(question)

@@ -21,7 +21,7 @@ class Choice:
 class Question:
     question: str
     type: str
-    correct_answer: str
+    correct_answers: List[str]
     choices: List[Choice]
 
 

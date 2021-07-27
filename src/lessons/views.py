@@ -5,9 +5,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.status import HTTP_201_CREATED
-from lessons.forms import UploadFileForm
 
 from lessons.comfortable import api
+from lessons.forms import UploadFileForm
 
 CATEGORIES = [
     {
@@ -37,6 +37,7 @@ def get_lessons(request, category: str) -> Response:
 def get_lesson(request, lesson_id: str):
     lesson = api.get_lesson(lesson_id=lesson_id)
     return Response(dataclasses.asdict(lesson))
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
