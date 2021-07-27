@@ -1,9 +1,9 @@
-from django import forms
+from rest_framework import serializers
 
 from reports.models import Report
 
 
-class UploadReportForm(forms.ModelForm):
+class ReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Report
         fields = ['report_type', 'value', 'timestamp']
