@@ -2,11 +2,6 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.urls import path, include
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-    TokenVerifyView
-)
 
 from labibli.settings import MEDIA_ROOT, MEDIA_URL
 
