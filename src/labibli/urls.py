@@ -9,7 +9,8 @@ User = get_user_model()
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/accounts/', include('authemail.urls')),
+    path('api/users/', include('authemail.urls')),
+    path('api/accounts/', include('accounts.urls')),
 ]
 
 urlpatterns += static(MEDIA_URL, document_root=MEDIA_ROOT)

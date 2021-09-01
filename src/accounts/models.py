@@ -3,9 +3,6 @@ from django.db import models
 from django.utils.timezone import now
 
 class MyUser(EmailAbstractUser):
-    # Custom fields
-
-    # Required
     objects = EmailUserManager()
 
 class Organization(models.Model):
