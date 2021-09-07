@@ -1,11 +1,12 @@
 from rest_framework import generics, permissions
+from labibli import permissions as custom_permissions
 
 from accounts.models import Organization, User
 from accounts.serializers import OrganizationSerializer, UserSerializer
 
 
 class OrganizationList(generics.ListCreateAPIView):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAdminUser]
     queryset = Organization.objects.all()
     serializer_class = OrganizationSerializer
 
@@ -14,7 +15,7 @@ class OrganizationList(generics.ListCreateAPIView):
 
 
 class OrganizationDetail(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [custom_permissions.IsOwner]
     queryset = Organization.objects.all()
     serializer_class = OrganizationSerializer
 

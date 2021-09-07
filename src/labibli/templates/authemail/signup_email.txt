@@ -1,5 +1,5 @@
 Vérifiez votre addresse email en cliquant sur ce lien:
-    {{ request.get_host }}/api/accounts/signupverify.html/?code={{ code }}
+    {{ request.get_host }}/api/users/signup/verify.html/?code={{ code }}
 
 Verify your email address by clicking on this link:
-    {{ request.get_host }}/api/accounts/signupverify.html/?code={{ code }}
+    {{ request.get_host }}/api/users/signup/verify.html/?code={{ code }}
