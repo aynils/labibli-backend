@@ -11,7 +11,11 @@ class OrganizationList(generics.ListCreateAPIView):
     serializer_class = OrganizationSerializer
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        user = self.request.user
+        organization = serializer.save(owner=user)
+        print(organization)
+        user.employee_of_organization = organization
+        user.save()
 
 
 class OrganizationDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -21,10 +25,12 @@ class OrganizationDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 class UserList(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAdminUser]
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
 
 class UserDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [custom_permissions.IsSelf]
     queryset = Organization.objects.all()
     serializer_class = UserSerializer

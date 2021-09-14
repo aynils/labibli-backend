@@ -11,6 +11,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/users/', include('authemail.urls')),
     path('api/accounts/', include('accounts.urls')),
+    path('api/items/', include('items.urls')),
     path('api-auth/', include('rest_framework.urls')), # for web browsable API
 ]
 

@@ -24,3 +24,28 @@ class IsOwner(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         return obj.owner == request.user
+
+
+class IsSelf(permissions.BasePermission):
+    """
+    Custom permission to only allow user to access itself.
+    /!\ Not working on lists
+    """
+
+    def has_object_permission(self, request, view, obj):
+        return obj == request.user
+
+
+class IsEmployeeOfOrganization(permissions.BasePermission):
+    """
+    Custom permission to only allow employees of an organization to access objects from this organization.
+    /!\ Not working on lists
+    """
+
+    def has_object_permission(self, request, view, obj):
+        return obj.organization == request.user.employee_of_organization
+
+
+class IsEmployeeOfAnOrganization(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return request.user.employee_of_organization is not None

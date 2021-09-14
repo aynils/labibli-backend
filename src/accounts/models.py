@@ -2,8 +2,16 @@ from authemail.models import EmailUserManager, EmailAbstractUser
 from django.db import models
 from django.utils.timezone import now
 
+
 class User(EmailAbstractUser):
     objects = EmailUserManager()
+    employee_of_organization = models.ForeignKey(
+        to='Organization',
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+    )
+
 
 class Organization(models.Model):
     is_active = models.BooleanField(default=True)
