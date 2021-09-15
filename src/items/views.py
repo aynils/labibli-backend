@@ -1,8 +1,8 @@
 from rest_framework import generics, permissions
-from labibli import permissions as custom_permissions
 
-from items.models import Book, Collection, Category
-from items.serializers import BookSerializer, CollectionSerializer, CategorySerializer
+from items.models import Book, Collection
+from items.serializers import BookSerializer, CollectionSerializer
+from labibli import permissions as custom_permissions
 
 
 class BooksList(generics.ListCreateAPIView):
@@ -11,12 +11,11 @@ class BooksList(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return Book.objects.filter(organization = user.employee_of_organization)
+        return Book.objects.filter(organization=user.employee_of_organization)
 
     def perform_create(self, serializer):
         user = self.request.user
         serializer.save(organization=user.employee_of_organization)
-
 
 
 class BookDetail(generics.RetrieveUpdateDestroyAPIView):

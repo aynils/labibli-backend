@@ -2,43 +2,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import Organization, User
-
-
-def authenticate_user(self):
-    result = self.client.post('/api/users/login/', {"email": self.user.email, "password": "testing"})
-    assert result.status_code == 200
-    token = result.json().get('token')
-    self.client.credentials(HTTP_AUTHORIZATION='Token ' + token)
-
-
-def authenticate_admin(self):
-    result = self.client.post('/api/users/login/', {"email": self.admin_user.email, "password": "testing"})
-    assert result.status_code == 200
-    token = result.json().get('token')
-    self.client.credentials(HTTP_AUTHORIZATION='Token ' + token)
-
-
-def create_admin_user():
-    admin_user = User.objects.create_superuser(
-        first_name='test_admin_user',
-        email='test_admin_user@test.com',
-        password='testing'
-    )
-    admin_user.is_verified = True
-    admin_user.save()
-    return admin_user
-
-
-def create_user():
-    user = User.objects.create_user(
-        first_name='testuser',
-        email='testuser@test.com',
-        password='testing'
-    )
-    user.is_verified = True
-    user.save()
-    return user
+from accounts.models import Organization
+from helpers.tests import authenticate_user, authenticate_admin, create_admin_user, create_user
 
 
 class OrganizationTests(APITestCase):
@@ -69,30 +34,34 @@ class OrganizationTests(APITestCase):
 
     def test_get_organizations(self):
         authenticate_admin(self)
-        url = reverse('get_put_patch_organizations', kwargs={"pk": 1})
+        url = reverse('get_put_patch_delete_organizations', kwargs={"pk": 1})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json().get('name'), self.organization.name)
 
     def test_get_other_organizations(self):
+        """
+        Ensure only owner can retrieve an organization
+        """
         authenticate_user(self)
-        url = reverse('get_put_patch_organizations', kwargs={"pk": 1})
+        url = reverse('get_put_patch_delete_organizations', kwargs={"pk": 1})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_update_organizations(self):
         authenticate_admin(self)
-        url = reverse('get_put_patch_organizations', kwargs={"pk": 1})
+        url = reverse('get_put_patch_delete_organizations', kwargs={"pk": 1})
         data = {'name': 'Test Rename Organization'}
         response = self.client.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json().get('name'), 'Test Rename Organization')
 
     def test_update_other_organizations(self):
         """
         Ensure only owner can update an organization
         """
         authenticate_user(self)
-        url = reverse('get_put_patch_organizations', kwargs={"pk": 1})
+        url = reverse('get_put_patch_delete_organizations', kwargs={"pk": 1})
         data = {'name': 'Test Rename Organization'}
         response = self.client.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
