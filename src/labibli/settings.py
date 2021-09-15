@@ -232,7 +232,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PARSER_CLASSES': (
         'rest_framework.parsers.JSONParser',
         'rest_framework.parsers.MultiPartParser',
-    )
+    ),
+    'TEST_REQUEST_DEFAULT_FORMAT': 'multipart'
 }
 
 AUTH_EMAIL_VERIFICATION = True

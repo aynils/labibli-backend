@@ -5,8 +5,8 @@ from accounts.models import Organization, User
 from accounts.serializers import OrganizationSerializer, UserSerializer
 
 
-class OrganizationList(generics.ListCreateAPIView):
-    permission_classes = [permissions.IsAdminUser]
+class OrganizationCreate(generics.CreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
     queryset = Organization.objects.all()
     serializer_class = OrganizationSerializer
 
