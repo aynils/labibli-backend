@@ -15,7 +15,7 @@ class BooksList(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         user = self.request.user
-        organization = serializer.save(organization=user.employee_of_organization)
+        serializer.save(organization=user.employee_of_organization)
 
 
 

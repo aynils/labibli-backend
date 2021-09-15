@@ -13,7 +13,6 @@ class OrganizationList(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         user = self.request.user
         organization = serializer.save(owner=user)
-        print(organization)
         user.employee_of_organization = organization
         user.save()
 
