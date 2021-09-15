@@ -25,9 +25,12 @@ class BookDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 class CollectionDetail(generics.RetrieveAPIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [custom_permissions.AllowSafeOrEmployeeOfOrganization]
     queryset = Collection.objects.all()
     serializer_class = CollectionSerializer
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        serializer.save(
+            owner=self.request.user,
+            organization=self.request.user.employee_of_organization
+        )

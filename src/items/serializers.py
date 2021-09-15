@@ -31,6 +31,10 @@ class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
+        fields = [
+            "name",
+            "organization",
+        ]
 
 
 class CollectionSerializer(serializers.ModelSerializer):
@@ -38,3 +42,7 @@ class CollectionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Collection
+        fields = [
+            "name",
+            "organization",
+        ]

@@ -49,3 +49,21 @@ class IsEmployeeOfOrganization(permissions.BasePermission):
 class IsEmployeeOfAnOrganization(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user.employee_of_organization is not None
+
+
+class AllowSafeOrEmployeeOfOrganization(permissions.BasePermission):
+    """
+    Custom permission to only allow employees of an organization to update objects from this organization.
+    /!\ Not working on lists
+    """
+
+    def has_permission(self, request, view):
+        if (
+                request.method in permissions.SAFE_METHODS
+                or request.user
+                and request.user.is_authenticated
+                and request.user.employee_of_organization
+        ):
+            return True
+
+        return False

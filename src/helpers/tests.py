@@ -1,4 +1,5 @@
 from accounts.models import User, Organization
+from items.models import Collection
 
 
 def authenticate_user(self):
@@ -45,3 +46,11 @@ def create_organization(owner):
     owner.employee_of_organization = organization
     owner.save()
     return organization
+
+
+def create_collection(organization):
+    collection = Collection.objects.create(
+        name='Test Collection',
+        organization=organization
+    )
+    return collection
