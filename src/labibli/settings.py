@@ -50,7 +50,7 @@ logging.config.dictConfig({
 
 #ERRORS LOGGING
 sentry_sdk.init(
-    dsn="https://4b7255cf7c78417f8fd216f4c0440106@o413315.ingest.sentry.io/5836142",
+    dsn="https://36ffea1b29ac488ea1992ed6e43eb500@o413315.ingest.sentry.io/5973618",
     integrations=[DjangoIntegration()],
     environment=os.getenv('DJANGO_ENV'),
     # Set traces_sample_rate to 1.0 to capture 100%
