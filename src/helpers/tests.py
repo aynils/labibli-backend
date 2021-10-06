@@ -1,5 +1,8 @@
+import datetime
+
 from accounts.models import User, Organization
-from items.models import Collection
+from customers.models import Customer
+from items.models import Collection, Lending
 
 
 def authenticate_user(self):
@@ -53,4 +56,32 @@ def create_collection(organization):
         name='Test Collection',
         organization=organization
     )
+    collection.save()
+    return collection
+
+
+def create_customer(organization):
+    collection = Customer.objects.create(
+        organization=organization,
+        first_name="Jean",
+        last_name="Michel",
+        email="jean@michel.ca",
+        phone="01234566778",
+        language="fr",
+        note="Client de test super sympa"
+    )
+    collection.save()
+    return collection
+
+
+def create_lending(organization, customer, book):
+    collection = Lending.objects.create(
+        organization=organization,
+        customer=customer,
+        book=book,
+        allowance_days=31,
+        lent_at=datetime.datetime.now(),
+        returned_at=None,
+    )
+    collection.save()
     return collection

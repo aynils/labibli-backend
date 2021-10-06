@@ -5,7 +5,11 @@ from rest_framework.test import APITestCase
 from helpers.tests import (authenticate_user,
                            create_admin_user,
                            create_user,
-                           create_organization, authenticate_admin, create_collection,
+                           create_organization,
+                           authenticate_admin,
+                           create_collection,
+                           create_lending,
+                           create_customer
                            )
 from items.models import Book
 
@@ -141,11 +145,13 @@ class CollectionTests(APITestCase):
         cls.admin_organization = create_organization(owner=cls.admin_user)
         cls.books = []
 
+        cls.collection = create_collection(cls.organization)
+
         for book in books_seed:
             new_book = Book.objects.create(**book, organization=cls.organization)
+            new_book.collections.add(cls.collection)
+            new_book.save()
             cls.books.append(new_book)
-
-        cls.collection = create_collection(cls.organization)
 
     def setUp(self):
         pass
@@ -157,6 +163,10 @@ class CollectionTests(APITestCase):
         url = reverse('get_put_patch_delete_collection', kwargs={"pk": 1})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data.get('books').__len__(),
+            self.collection.book_set.all().__len__()
+        )
 
     def test_update_collection(self):
         """
@@ -166,7 +176,7 @@ class CollectionTests(APITestCase):
         url = reverse('get_put_patch_delete_collection', kwargs={"pk": 1})
         data = {"name": "New collection name"}
         response = self.client.patch(url, data)
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_update_collection_anonymous(self):
         """
@@ -185,4 +195,73 @@ class CollectionTests(APITestCase):
         url = reverse('get_put_patch_delete_collection', kwargs={"pk": 1})
         data = {"name": "New collection name"}
         response = self.client.patch(url, data)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class LendingTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = create_user()
+        cls.admin_user = create_admin_user()
+        cls.organization = create_organization(owner=cls.user)
+        cls.admin_organization = create_organization(owner=cls.admin_user)
+        cls.books = []
+
+        for book in books_seed:
+            new_book = Book.objects.create(**book, organization=cls.organization)
+            cls.books.append(new_book)
+
+        cls.collection = create_collection(cls.organization)
+
+        cls.customer = create_customer(cls.organization)
+
+        cls.lending = create_lending(cls.organization, book=cls.books[0], customer=cls.customer)
+
+    def setUp(self):
+        pass
+
+    def test_get_lending(self):
+        """
+        Ensure collections are public
+        """
+        url = reverse('get_put_patch_delete_lending', kwargs={"pk": 1})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_update_lending(self):
+        """
+        Ensure collections can be updated by an user of the organization the collection belongs to
+        """
+        authenticate_user(self)
+        url = reverse('get_put_patch_delete_lending', kwargs={"pk": 1})
+        data = {"name": "New collection name"}
+        response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_update_lending_anonymous(self):
+        """
+        Ensure collections can only be updated by authenticated user
+        """
+        url = reverse('get_put_patch_delete_lending', kwargs={"pk": 1})
+        data = {"name": "New collection name"}
+        response = self.client.patch(url, data)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_update_lending_other_organization(self):
+        """
+        Ensure collections can only be updated by an user of the organization the collection belongs to
+        """
+        authenticate_admin(self)
+        url = reverse('get_put_patch_delete_lending', kwargs={"pk": 1})
+        data = {"name": "New collection name"}
+        response = self.client.patch(url, data)
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_get_lendings(self):
+        """
+        Ensure collections are public
+        """
+        authenticate_user(self)
+        url = reverse('list_lending')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

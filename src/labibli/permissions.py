@@ -67,3 +67,9 @@ class AllowSafeOrEmployeeOfOrganization(permissions.BasePermission):
             return True
 
         return False
+
+    def has_object_permission(self, request, view, obj):
+        return (
+                request.method in permissions.SAFE_METHODS
+                or request.user.employee_of_organization == obj.organization
+        )

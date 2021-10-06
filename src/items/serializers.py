@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from items.models import Book, Category, Collection
+from items.models import Book, Category, Collection, Lending
 
 
 class BookSerializer(serializers.ModelSerializer):
@@ -21,9 +21,10 @@ class BookSerializer(serializers.ModelSerializer):
             "published_year",
             "description",
             "categories",
-            "collections",
+            # "collections",
             "organization",
         ]
+
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -39,10 +40,30 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class CollectionSerializer(serializers.ModelSerializer):
     organization = serializers.ReadOnlyField(source='organization.name')
+    books = BookSerializer(source='book_set',many=True, read_only=True)
 
     class Meta:
         model = Collection
         fields = [
             "name",
             "organization",
+            "books",
+            "book_set"
+        ]
+
+
+class LendingSerializer(serializers.ModelSerializer):
+    organization = serializers.ReadOnlyField(source='organization.name')
+    # customer = CustomerSerializer(source='customer', read_only=True)
+    book = BookSerializer(read_only=True)
+
+    class Meta:
+        model = Lending
+        fields = [
+            "organization",
+            "allowance_days",
+            "lent_at",
+            "returned_at",
+            "book",
+            # "customer",
         ]

@@ -8,7 +8,9 @@ urlpatterns = [
     path(r'books/<int:pk>/', views.BookDetail.as_view(), name="get_put_patch_delete_book"),
     # path(r'categories/', views.CategoriesList.as_view()),
     # path(r'categories/<int:pk>/', views.CategoryDetail.as_view()),
-    path(r'collection/<int:pk>/', views.CollectionDetail.as_view(), name="get_put_patch_delete_collection"),
+    path(r'collections/<int:pk>/', views.CollectionDetail.as_view(), name="get_put_patch_delete_collection"),
+    path(r'lendings/<int:pk>/', views.LendingDetail.as_view(), name="get_put_patch_delete_lending"),
+    path(r'lendings/', views.LendingsList.as_view(), name="list_lending"),
 ]
 
 urlpatterns = format_suffix_patterns(urlpatterns)
