@@ -26,7 +26,6 @@ class BookSerializer(serializers.ModelSerializer):
         ]
 
 
-
 class CategorySerializer(serializers.ModelSerializer):
     organization = serializers.ReadOnlyField(source='organization.name')
 
@@ -40,7 +39,7 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class CollectionSerializer(serializers.ModelSerializer):
     organization = serializers.ReadOnlyField(source='organization.name')
-    books = BookSerializer(source='book_set',many=True, read_only=True)
+    books = BookSerializer(source='book_set', many=True, read_only=True)
 
     class Meta:
         model = Collection

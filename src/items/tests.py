@@ -9,7 +9,8 @@ from helpers.tests import (authenticate_user,
                            authenticate_admin,
                            create_collection,
                            create_lending,
-                           create_customer
+                           create_customer,
+                           create_category
                            )
 from items.models import Book
 
@@ -263,5 +264,66 @@ class LendingTests(APITestCase):
         """
         authenticate_user(self)
         url = reverse('list_lending')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class CategoryTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = create_user()
+        cls.admin_user = create_admin_user()
+        cls.organization = create_organization(owner=cls.user)
+        cls.admin_organization = create_organization(owner=cls.admin_user)
+        cls.books = []
+
+        cls.category = create_category(organization=cls.organization)
+
+    def setUp(self):
+        pass
+
+    def test_get_category(self):
+        """
+        Ensure collections are public
+        """
+        url = reverse('get_put_patch_delete_category', kwargs={"pk": 1})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_update_category(self):
+        """
+        Ensure collections can be updated by an user of the organization the collection belongs to
+        """
+        authenticate_user(self)
+        url = reverse('get_put_patch_delete_category', kwargs={"pk": 1})
+        data = {"name": "New category name"}
+        response = self.client.patch(url, data)
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_update_category_anonymous(self):
+        """
+        Ensure collections can only be updated by authenticated user
+        """
+        url = reverse('get_put_patch_delete_category', kwargs={"pk": 1})
+        data = {"name": "New category name"}
+        response = self.client.patch(url, data)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_update_category_other_organization(self):
+        """
+        Ensure collections can only be updated by an user of the organization the collection belongs to
+        """
+        authenticate_admin(self)
+        url = reverse('get_put_patch_delete_category', kwargs={"pk": 1})
+        data = {"name": "New category name"}
+        response = self.client.patch(url, data)
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_get_categories(self):
+        """
+        Ensure collections are public
+        """
+        authenticate_user(self)
+        url = reverse('list_category')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)

@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions
 
-from items.models import Book, Collection, Lending
-from items.serializers import BookSerializer, CollectionSerializer, LendingSerializer
+from items.models import Book, Collection, Lending, Category
+from items.serializers import BookSerializer, CollectionSerializer, LendingSerializer, CategorySerializer
 from labibli import permissions as custom_permissions
 
 
@@ -60,6 +60,31 @@ class LendingsList(generics.ListCreateAPIView):
     def get_queryset(self):
         user = self.request.user
         return Lending.objects.filter(organization=user.employee_of_organization)
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        serializer.save(organization=user.employee_of_organization)
+
+
+class CategoryDetail(generics.RetrieveAPIView):
+    permission_classes = [custom_permissions.AllowSafeOrEmployeeOfOrganization]
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
+    def perform_create(self, serializer):
+        serializer.save(
+            owner=self.request.user,
+            organization=self.request.user.employee_of_organization
+        )
+
+
+class CategoriesList(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfAnOrganization]
+    serializer_class = CategorySerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        return Category.objects.filter(organization=user.employee_of_organization)
 
     def perform_create(self, serializer):
         user = self.request.user

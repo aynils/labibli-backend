@@ -2,7 +2,7 @@ import datetime
 
 from accounts.models import User, Organization
 from customers.models import Customer
-from items.models import Collection, Lending
+from items.models import Collection, Lending, Category
 
 
 def authenticate_user(self):
@@ -82,6 +82,15 @@ def create_lending(organization, customer, book):
         allowance_days=31,
         lent_at=datetime.datetime.now(),
         returned_at=None,
+    )
+    collection.save()
+    return collection
+
+
+def create_category(organization):
+    collection = Category.objects.create(
+        organization=organization,
+        name="Catégorie de test"
     )
     collection.save()
     return collection

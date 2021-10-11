@@ -233,7 +233,8 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.JSONParser',
         'rest_framework.parsers.MultiPartParser',
     ),
-    'TEST_REQUEST_DEFAULT_FORMAT': 'multipart'
+    'TEST_REQUEST_DEFAULT_FORMAT': 'multipart',
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination'
 }
 
 AUTH_EMAIL_VERIFICATION = True

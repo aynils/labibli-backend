@@ -1,9 +1,9 @@
 from django.db import models
 from django.utils.timezone import now
 
-from customers.models import Customer
 # Create your models here.
 from accounts.models import Organization
+from customers.models import Customer
 
 
 class Category(models.Model):
@@ -39,18 +39,17 @@ class Book(models.Model):
     title = models.CharField(max_length=255, unique=False, blank=False, null=False)
     isbn = models.CharField(max_length=255, unique=False, blank=False, null=False)
     publisher = models.CharField(max_length=255, unique=False, blank=True, null=True)
-    picture = models.ImageField(upload_to='pictures',blank=True, null=True)
+    picture = models.ImageField(upload_to='pictures', blank=True, null=True)
     lang = models.CharField(max_length=25, unique=False, blank=True, null=True)
     published_year = models.IntegerField(unique=False, blank=True, null=True)
     description = models.TextField(unique=False, blank=True, null=True)
     categories = models.ManyToManyField(Category, blank=True)
-    collections = models.ManyToManyField(Collection,blank=True)
+    collections = models.ManyToManyField(Collection, blank=True)
 
     class Meta:
         unique_together = [
             ['isbn', 'organization'],
         ]
-
 
 
 class Lending(models.Model):
