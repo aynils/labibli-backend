@@ -1,4 +1,6 @@
 import datetime
+import io
+from PIL import Image
 
 from accounts.models import User, Organization
 from customers.models import Customer
@@ -94,3 +96,12 @@ def create_category(organization):
     )
     collection.save()
     return collection
+
+
+def generate_photo_file():
+    file = io.BytesIO()
+    image = Image.new('RGBA', size=(100, 100), color=(155, 0, 0))
+    image.save(file, 'png')
+    file.name = 'test.png'
+    file.seek(0)
+    return file

@@ -218,6 +218,14 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
 
+# Store images on Digital Ocean S3
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+AWS_S3_REGION_NAME =  os.getenv("DIGITAL_OCEAN_REGION_NAME")
+AWS_S3_ENDPOINT_URL = f"https://{AWS_S3_REGION_NAME}.digitaloceanspaces.com"
+AWS_ACCESS_KEY_ID =  os.getenv("DIGITAL_OCEAN_KEY_ID")
+AWS_SECRET_ACCESS_KEY =  os.getenv("DIGITAL_OCEAN_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = os.getenv("DIGITAL_OCEAN_STORAGE_BUCKET_NAME")
+
 REST_FRAMEWORK = {
     # Use Django's standard `django.contrib.auth` permissions,
     # or allow read-only access for unauthenticated users.
@@ -252,3 +260,4 @@ EMAIL_HOST_USER = os.environ.get('AUTHEMAIL_EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('AUTHEMAIL_EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
+

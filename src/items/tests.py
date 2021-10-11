@@ -10,7 +10,8 @@ from helpers.tests import (authenticate_user,
                            create_collection,
                            create_lending,
                            create_customer,
-                           create_category
+                           create_category,
+                           generate_photo_file
                            )
 from items.models import Book
 
@@ -64,6 +65,7 @@ class BookTests(APITestCase):
         cls.organization = create_organization(owner=cls.user)
         cls.admin_organization = create_organization(owner=cls.admin_user)
         cls.books = []
+        cls.picture = generate_photo_file()
 
         for book in books_seed:
             new_book = Book.objects.create(**book, organization=cls.organization)
@@ -71,6 +73,7 @@ class BookTests(APITestCase):
 
     def setUp(self):
         pass
+
 
     def test_list_books(self):
         """
@@ -122,7 +125,7 @@ class BookTests(APITestCase):
     def test_post_book(self):
         authenticate_user(self)
         url = reverse('get_post_books')
-        data = dict(**new_book, organization=self.organization)
+        data = dict(**new_book, organization=self.organization, picture=self.picture)
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.json().get('title'), new_book.get('title'))
