@@ -284,15 +284,24 @@ class CategoryTests(APITestCase):
 
     def test_get_category(self):
         """
-        Ensure collections are public
+        Ensure categories are only accessible in the context of an org
         """
+        authenticate_user(self)
         url = reverse('get_put_patch_delete_category', kwargs={"pk": 1})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    def test_get_category_anonymous(self):
+        """
+        Ensure categories are not public
+        """
+        url = reverse('get_put_patch_delete_category', kwargs={"pk": 1})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_update_category(self):
         """
-        Ensure collections can be updated by an user of the organization the collection belongs to
+        Ensure categories can be updated by an user of the organization the collection belongs to
         """
         authenticate_user(self)
         url = reverse('get_put_patch_delete_category', kwargs={"pk": 1})
@@ -302,7 +311,7 @@ class CategoryTests(APITestCase):
 
     def test_update_category_anonymous(self):
         """
-        Ensure collections can only be updated by authenticated user
+        Ensure categories can only be updated by authenticated user
         """
         url = reverse('get_put_patch_delete_category', kwargs={"pk": 1})
         data = {"name": "New category name"}
@@ -311,7 +320,7 @@ class CategoryTests(APITestCase):
 
     def test_update_category_other_organization(self):
         """
-        Ensure collections can only be updated by an user of the organization the collection belongs to
+        Ensure categories can only be updated by an user of the organization the collection belongs to
         """
         authenticate_admin(self)
         url = reverse('get_put_patch_delete_category', kwargs={"pk": 1})
@@ -321,7 +330,7 @@ class CategoryTests(APITestCase):
 
     def test_get_categories(self):
         """
-        Ensure collections are public
+        Ensure categories are only accessible by logged-in user
         """
         authenticate_user(self)
         url = reverse('list_category')

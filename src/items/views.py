@@ -67,7 +67,7 @@ class LendingsList(generics.ListCreateAPIView):
 
 
 class CategoryDetail(generics.RetrieveAPIView):
-    permission_classes = [custom_permissions.AllowSafeOrEmployeeOfOrganization]
+    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfOrganization]
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
 
