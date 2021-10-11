@@ -222,6 +222,16 @@ class CollectionTests(APITestCase):
         self.assertEqual(response.json().get('name'), "New collection name")
         self.assertEqual(response.json().get('organization'), self.organization.name)
 
+    def test_post_collection_anonymous(self):
+        """
+        Ensure collections cannot be created by anonymous users
+        """
+        url = reverse('list_post_collection')
+        data = {"name": "New collection name"}
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
 
 class LendingTests(APITestCase):
     @classmethod
@@ -302,7 +312,7 @@ class LendingTests(APITestCase):
 
     def test_post_lending(self):
         """
-        Ensure categories can be created by an user of the organization the collection belongs to
+        Ensure lendings can be created by an user of the organization the lending belongs to
         """
         authenticate_user(self)
         url = reverse('list_post_lending')
@@ -315,6 +325,19 @@ class LendingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.json().get('customer').get('email'), self.customer.email)
         self.assertEqual(response.json().get('organization'), self.organization.name)
+
+    def test_post_lending_anonymous(self):
+        """
+        Ensure lendings cannot be created by anonymous users
+        """
+        url = reverse('list_post_lending')
+        data = {
+            "customer": self.customer.id,
+            "book": self.books[0].id,
+            "allowance_days": 31,
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class CategoryTests(APITestCase):

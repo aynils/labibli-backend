@@ -77,15 +77,49 @@ class CustomerTests(APITestCase):
         Ensure customers access is limited to the org they belongs to
         """
         authenticate_user(self)
-        url = reverse('list_customer')
+        url = reverse('list_post_customer')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-
 
     def test_get_customers_anonymous(self):
         """
         Ensure customers access is limited to the org they belongs to
         """
-        url = reverse('list_customer')
+        url = reverse('list_post_customer')
         response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_post_customer(self):
+        """
+        Ensure customers can be created by an user of the organization the collection belongs to
+        """
+        authenticate_user(self)
+        url = reverse('list_post_customer')
+        data = {
+            "first_name": "Jean",
+            "last_name": "Petit",
+            "email": "jean@petit.be",
+            "phone": "1234567890",
+            "language": "fr",
+            "note": "Il est gentil",
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json().get('email'), "jean@petit.be")
+        self.assertEqual(response.json().get('organization'), self.organization.name)
+
+    def test_post_customer_anonymous(self):
+        """
+        Ensure customers cannot be created by anonymous users
+        """
+        url = reverse('list_post_customer')
+        data = {
+            "first_name": "Jean",
+            "last_name": "Petit",
+            "email": "jean@petit.be",
+            "phone": "1234567890",
+            "language": "fr",
+            "note": "Il est gentil",
+        }
+        response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
