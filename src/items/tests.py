@@ -74,13 +74,12 @@ class BookTests(APITestCase):
     def setUp(self):
         pass
 
-
     def test_list_books(self):
         """
         Ensure an user can list books from the organisation they're an employee of.
         """
         authenticate_user(self)
-        url = reverse('get_post_books')
+        url = reverse('list_post_books')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         books = response.json()
@@ -96,7 +95,7 @@ class BookTests(APITestCase):
         Book.objects.create(**books_seed[0], organization=self.admin_organization)
 
         authenticate_user(self)
-        url = reverse('get_post_books')
+        url = reverse('list_post_books')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         books = response.json()
@@ -124,12 +123,22 @@ class BookTests(APITestCase):
 
     def test_post_book(self):
         authenticate_user(self)
-        url = reverse('get_post_books')
+        url = reverse('list_post_books')
         data = dict(**new_book, organization=self.organization, picture=self.picture)
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.json().get('title'), new_book.get('title'))
         self.assertEqual(response.json().get('organization'), self.organization.name)
+
+    def test_post_book_anonymous(self):
+        """
+        Ensure books cannot be created by anonymous users
+        """
+        url = reverse('list_post_books')
+        data = dict(**new_book, organization=self.organization, picture=self.picture)
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
 
     def test_update_book(self):
         authenticate_user(self)
@@ -201,6 +210,18 @@ class CollectionTests(APITestCase):
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_post_collection(self):
+        """
+        Ensure collections can be created by an user of the organization the collection belongs to
+        """
+        authenticate_user(self)
+        url = reverse('list_post_collection')
+        data = {"name": "New collection name"}
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json().get('name'), "New collection name")
+        self.assertEqual(response.json().get('organization'), self.organization.name)
+
 
 class LendingTests(APITestCase):
     @classmethod
@@ -224,23 +245,32 @@ class LendingTests(APITestCase):
     def setUp(self):
         pass
 
+    def test_get_lending_anonymous(self):
+        """
+        Ensure lendings are not public
+        """
+        url = reverse('get_put_patch_delete_lending', kwargs={"pk": 1})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_get_lending(self):
         """
-        Ensure collections are public
+        Ensure lendings are not public
         """
+        authenticate_user(self)
         url = reverse('get_put_patch_delete_lending', kwargs={"pk": 1})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_update_lending(self):
         """
-        Ensure collections can be updated by an user of the organization the collection belongs to
+        Ensure lendings can be updated by an user of the organization the lendings belongs to
         """
         authenticate_user(self)
         url = reverse('get_put_patch_delete_lending', kwargs={"pk": 1})
         data = {"name": "New collection name"}
         response = self.client.patch(url, data)
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_update_lending_anonymous(self):
         """
@@ -259,16 +289,32 @@ class LendingTests(APITestCase):
         url = reverse('get_put_patch_delete_lending', kwargs={"pk": 1})
         data = {"name": "New collection name"}
         response = self.client.patch(url, data)
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_get_lendings(self):
         """
         Ensure collections are public
         """
         authenticate_user(self)
-        url = reverse('list_lending')
+        url = reverse('list_post_lending')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_post_lending(self):
+        """
+        Ensure categories can be created by an user of the organization the collection belongs to
+        """
+        authenticate_user(self)
+        url = reverse('list_post_lending')
+        data = {
+            "customer": self.customer.id,
+            "book": self.books[0].id,
+            "allowance_days": 31,
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json().get('customer').get('email'), self.customer.email)
+        self.assertEqual(response.json().get('organization'), self.organization.name)
 
 
 class CategoryTests(APITestCase):
@@ -300,6 +346,28 @@ class CategoryTests(APITestCase):
         """
         url = reverse('get_put_patch_delete_category', kwargs={"pk": 1})
         response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_post_category(self):
+        """
+        Ensure categories can be created by an user of the organization the collection belongs to
+        """
+        authenticate_user(self)
+        url = reverse('list_post_category')
+        data = {"name": "New category name"}
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json().get('name'), "New category name")
+        self.assertEqual(response.json().get('organization'), self.organization.name)
+
+
+    def test_post_category_anonymous(self):
+        """
+        Ensure categories cannot be created by anonymous users
+        """
+        url = reverse('list_post_category')
+        data = {"name": "New category name"}
+        response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_update_category(self):
@@ -336,6 +404,6 @@ class CategoryTests(APITestCase):
         Ensure categories are only accessible by logged-in user
         """
         authenticate_user(self)
-        url = reverse('list_category')
+        url = reverse('list_post_category')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)

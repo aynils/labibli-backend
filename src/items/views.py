@@ -41,8 +41,21 @@ class CollectionDetail(generics.RetrieveUpdateDestroyAPIView):
         )
 
 
-class LendingDetail(generics.RetrieveAPIView):
-    permission_classes = [custom_permissions.AllowSafeOrEmployeeOfOrganization]
+class CollectionsList(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfAnOrganization]
+    serializer_class = CollectionSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        return Collection.objects.filter(organization=user.employee_of_organization)
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        serializer.save(organization=user.employee_of_organization)
+
+
+class LendingDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfOrganization]
     queryset = Lending.objects.all()
     serializer_class = LendingSerializer
 

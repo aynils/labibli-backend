@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from customers.serializers import CustomerSerializer
 from items.models import Book, Category, Collection, Lending
 
 
@@ -54,7 +55,10 @@ class CollectionSerializer(serializers.ModelSerializer):
 class LendingSerializer(serializers.ModelSerializer):
     organization = serializers.ReadOnlyField(source='organization.name')
     # customer = CustomerSerializer(source='customer', read_only=True)
-    book = BookSerializer(read_only=True)
+    def to_representation(self, instance):
+        self.fields['book'] = BookSerializer(read_only=False)
+        self.fields['customer'] = CustomerSerializer(read_only=False)
+        return super(LendingSerializer, self).to_representation(instance)
 
     class Meta:
         model = Lending
@@ -64,5 +68,5 @@ class LendingSerializer(serializers.ModelSerializer):
             "lent_at",
             "returned_at",
             "book",
-            # "customer",
+            "customer",
         ]
