@@ -14,7 +14,7 @@ from firebase_admin import firestore
 
 from accounts.models import User, Organization
 from customers.models import Customer
-from items.models import Book, Category, Collection
+from items.models import Book, Category, Collection, Lending
 
 DEFAULT_PICTURE_PLACEHOLDER = 'https://firebasestorage.googleapis.com/v0/b/biblio-44466.appspot.com/o/aW1hZ2UucG5nV2VkIEFwciAyOCAyMDIxIDE0OjI5OjU1IEdNVC0wMzAwIChoZXVyZSBhdmFuY8OpZSBkZSBs4oCZQXRsYW50aXF1ZSk%3D?alt=media&token=a7be9af5-3072-4040-a0d8-2870d0cc3d9e'
 
@@ -33,6 +33,9 @@ collections_link = {}
 picture_errors = []
 collection_errors = []
 categories_errors = []
+books_errors = []
+books_duplicates = []
+
 
 class ImportFromV1(View):
     def get(self, request):
@@ -55,8 +58,14 @@ def import_data_from_v1() -> dict:
         result = import_categories()
     if result.get("status") == "success":
         result = import_books()
-    # if result.get("status") == "success":
-    #     result = import_lendings()
+    if result.get("status") == "success":
+        result = import_lendings()
+
+    print(f"Collections_error - {collection_errors.__len__()} {collection_errors}")
+    print(f"Pictures_error - {picture_errors.__len__()} {picture_errors}")
+    print(f"Categories_error - {categories_errors.__len__()} {categories_errors}")
+    print(f"Books_error - {books_errors.__len__()} {books_errors}")
+    print(f"Duplicate_books - {books_duplicates.__len__()} {books_duplicates}")
 
     return result
 
@@ -75,9 +84,10 @@ def import_users() -> dict:
                     password=uuid.uuid4().hex,
                 )
             except IntegrityError:
-                print(f"This user already exists. {user}")
+                print(f"This user already exists. {user._data.get('email')}")
 
     except Exception as e:
+        print(e)
         result['status'] = "error"
         result['error'] = e
 
@@ -105,6 +115,7 @@ def import_organizations() -> dict:
             owner.save()
 
     except Exception as e:
+        print(e)
         result['status'] = "error"
         result['error'] = e
 
@@ -113,7 +124,6 @@ def import_organizations() -> dict:
 
 def create_default_collections() -> dict:
     result = {"status": "success"}
-    objects = []
     try:
         for collection_id, organization_id in organization_link.items():
             organization = Organization.objects.get(id=organization_id)
@@ -127,11 +137,12 @@ def create_default_collections() -> dict:
                     name=organization.name,
                     organization=organization
                 )
-                objects.append(collection)
+                collection.save()
             collections_link[collection_id] = collection.id
-        Collection.objects.bulk_create(objects)
+
 
     except Exception as e:
+        print(e)
         result['status'] = "error"
         result['error'] = e
 
@@ -142,7 +153,6 @@ def import_customers() -> dict:
     result = {"status": "success"}
     try:
         firebase_items = import_from_firebase(collection="customers")
-        objects = []
         for item in firebase_items:
             organization_id = organization_link[item._data.get('organizationId')]
             organization = Organization.objects.get(id=organization_id)
@@ -161,11 +171,11 @@ def import_customers() -> dict:
                     language=item._data.get('language'),
                     note=item._data.get('note'),
                 )
-                objects.append(customer)
+                customer.save()
             customer_link[item.id] = customer.id
-        Customer.objects.bulk_create(objects)
 
     except Exception as e:
+        print(e)
         result['status'] = "error"
         result['error'] = e
 
@@ -176,7 +186,6 @@ def import_categories() -> dict:
     result = {"status": "success"}
     try:
         firebase_items = import_from_firebase(collection="categories")
-        objects = []
         for item in firebase_items:
             organization_id = organization_link[item._data.get('organizationId')]
             organization = Organization.objects.get(id=organization_id)
@@ -190,11 +199,12 @@ def import_categories() -> dict:
                     name=item._data.get('name'),
                     organization=organization
                 )
-                objects.append(category)
+                category.save()
             categories_link[item.id] = category.id
-        Category.objects.bulk_create(objects)
+
 
     except Exception as e:
+        print(e)
         result['status'] = "error"
         result['error'] = e
 
@@ -209,66 +219,121 @@ def import_books() -> dict:
         for item in firebase_items:
             count += 1
             if item._data.get('collectionId') and item._data.get(
-                    'collectionId') in collections_link:  # reject old books not linked to a collection
+                    'collectionId') in collections_link:  # reject old books not linked to a collection or to a deprecated cone
                 organization_id = organization_link[item._data.get('collectionId')]
                 organization = Organization.objects.get(id=organization_id)
                 try:
-                    book = Book.objects.get(
-                        isbn=item._data.get('isbn'),
-                        organization=organization
-                    )
-                except Book.DoesNotExist:
-                    try:
+                    if item._data.get('isbn'):
+                        book = Book.objects.get(
+                            isbn=item._data.get('isbn'),
+                            organization=organization
+                        )
+                        print(f"Duplicate boook - {item._data.get('isbn')} - {organization.name}")
+                        books_duplicates.append({
+                            organization.name: {
+                                "title": item._data.get('title'),
+                                "isbn": item._data.get('isbn'), }
+                        })
+                    elif item._data.get('title'):
                         book = Book.objects.get(
                             title=item._data.get('title'),
                             organization=organization
                         )
-                    except Book.DoesNotExist:
-                        collections = [collections_link[item._data.get('collectionId')]]
-                        categories = []
-                        for category_id in item._data.get('categories', []):
-                            if categories_link.get(category_id):
-                                categories.append(categories_link.get(category_id))
-                            else:
-                                categories_errors.append({"book_firebase_id": item.id, "category": category_id })
-                                print(f"Category not found {category_id}")
+                        print(f"Duplicate boook - {item._data.get('title')} - {organization.name}")
+                        books_duplicates.append({
+                            organization.name: {
+                                "title": item._data.get('title'),
+                                "isbn": item._data.get('isbn'), }
+                        })
+                    else:
+                        print(f"No ISBN nor title for book - {item.id} - {organization.name}")
+                        books_errors.append({
+                            "organization": organization.name,
+                            "title": item._data.get('title'),
+                            "isbn": item._data.get('isbn'),
+                        })
+                except Book.DoesNotExist:
+                    collections = [collections_link[item._data.get('collectionId')]]
+                    categories = []
+                    for category_id in item._data.get('categories', []):
+                        if categories_link.get(category_id):
+                            categories.append(categories_link.get(category_id))
+                        else:
+                            categories_errors.append({"book_firebase_id": item.id, "category": category_id})
+                            print(f"Category not found {category_id}")
 
-                        picture = download_picture_from_url(item._data.get('picture'))
-                        book = Book(
-                            title=item._data.get('title'),
-                            organization=organization,
-                            archived=item._data.get('archived') or False,
-                            featured=item._data.get('featured') or False,
-                            status=item._data.get('status'),
-                            author=item._data.get('author'),
-                            isbn=item._data.get('isbn'),
-                            publisher=item._data.get('publisher'),
-                            lang=item._data.get('lang'),
-                            published_year=item._data.get('publishedYear'),
-                            description=item._data.get('description'),
-                            inventory=item._data.get('inventory'),
-                        )
-                        book.save()
-                        book.picture.save(f"{book.id}.jpg", picture, save=True)
-                        for collection in collections:
-                            book.collections.add(collection)
-                        for category in categories:
-                            book.categories.add(category)
-                        book.save()
+                    picture = download_picture_from_url(item._data.get('picture'))
+                    book = Book(
+                        title=item._data.get('title') or None,
+                        organization=organization,
+                        archived=item._data.get('archived') or False,
+                        deleted=item._data.get('archived') or False,
+                        featured=item._data.get('featured') or False,
+                        status=item._data.get('status'),
+                        author=item._data.get('author'),
+                        isbn=item._data.get('isbn') or None,
+                        publisher=item._data.get('publisher'),
+                        lang=item._data.get('lang'),
+                        published_year=item._data.get('publishedYear'),
+                        description=item._data.get('description'),
+                        inventory=item._data.get('inventory'),
+                    )
+                    book.save()
+                    book.picture.save(f"{book.id}.jpg", picture, save=True)
+                    for collection in collections:
+                        book.collections.add(collection)
+                    for category in categories:
+                        book.categories.add(category)
+                    book.save()
                 books_link[item.id] = book.id
             else:
                 print(f"CollectionId not found {item._data.get('collectionId')}")
                 collection_errors.append(item._data.get('collectionId'))
 
-            print (f"{count}/{firebase_items.__len__()}")
+            print(f"{count}/{firebase_items.__len__()}")
+
     except Exception as e:
         print(e)
         result['status'] = "error"
         result['error'] = e
 
-    print(f"Collections_error - {collection_errors.__len__()} {collection_errors}")
-    print(f"Pictures_error - {picture_errors.__len__()} {picture_errors}")
-    print(f"Categories_error - {categories_errors.__len__()} {categories_errors}")
+    return result
+
+
+def import_lendings() -> dict:
+    result = {"status": "success"}
+    try:
+        firebase_items = import_from_firebase(collection="lendings")
+        for item in firebase_items:
+            organization_id = organization_link[item._data.get('collectionId')]
+            customer_id = customer_link[item._data.get('customerId')]
+            book_id = books_link[item._data.get('bookId')]
+            organization = Organization.objects.get(id=organization_id)
+            customer = Customer.objects.get(id=customer_id)
+            book = Book.objects.get(id=book_id)
+            try:
+                Lending.objects.get(
+                    organization=organization,
+                    customer=customer,
+                    book=book,
+                    lent_at=item._data.get('startDate'),
+                )
+            except Lending.DoesNotExist:
+                lending = Lending(
+                    organization=organization,
+                    customer=customer,
+                    book=book,
+                    allowance_days=item._data.get('allowance'),
+                    lent_at=item._data.get('startDate'),
+                    returned_at=item._data.get('endDate') or None,
+                )
+                lending.save()
+
+    except Exception as e:
+        print(e)
+        result['status'] = "error"
+        result['error'] = e
+
     return result
 
 
