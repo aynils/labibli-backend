@@ -13,7 +13,8 @@ urlpatterns = [
     path('api/accounts/', include('accounts.urls')),
     path('api/items/', include('items.urls')),
     path('api/customers/', include('customers.urls')),
-    path('api-auth/', include('rest_framework.urls')), # for web browsable API
+    path('scripts/', include('scripts.urls')),
+    # path('api-auth/', include('rest_framework.urls')), # for web browsable API
 ]
 
 urlpatterns += static(MEDIA_URL, document_root=MEDIA_ROOT)

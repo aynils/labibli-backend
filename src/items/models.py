@@ -41,6 +41,7 @@ class Book(models.Model):
     publisher = models.CharField(max_length=255, unique=False, blank=True, null=True)
     picture = models.ImageField(upload_to='pictures', blank=True, null=True)
     lang = models.CharField(max_length=25, unique=False, blank=True, null=True)
+    inventory = models.IntegerField(unique=False, blank=True, null=True)
     published_year = models.IntegerField(unique=False, blank=True, null=True)
     description = models.TextField(unique=False, blank=True, null=True)
     categories = models.ManyToManyField(Category, blank=True)
