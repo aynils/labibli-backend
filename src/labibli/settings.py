@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/3.1/ref/settings/
 """
 from datetime import timedelta
 from pathlib import Path
+
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 
@@ -48,7 +49,7 @@ logging.config.dictConfig({
     },
 })
 
-#ERRORS LOGGING
+# ERRORS LOGGING
 sentry_sdk.init(
     dsn="https://36ffea1b29ac488ea1992ed6e43eb500@o413315.ingest.sentry.io/5973618",
     integrations=[DjangoIntegration()],
@@ -104,7 +105,10 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 DEBUG = os.getenv('DEBUG', False) == 'True'
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
-# Application definition
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000"
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -122,11 +126,13 @@ INSTALLED_APPS = [
     'scripts',
     'rest_framework',
     'rest_framework.authtoken',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -221,10 +227,10 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
 
 # Store images on Digital Ocean S3
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-AWS_S3_REGION_NAME =  os.getenv("DIGITAL_OCEAN_REGION_NAME")
+AWS_S3_REGION_NAME = os.getenv("DIGITAL_OCEAN_REGION_NAME")
 AWS_S3_ENDPOINT_URL = f"https://{AWS_S3_REGION_NAME}.digitaloceanspaces.com"
-AWS_ACCESS_KEY_ID =  os.getenv("DIGITAL_OCEAN_KEY_ID")
-AWS_SECRET_ACCESS_KEY =  os.getenv("DIGITAL_OCEAN_SECRET_ACCESS_KEY")
+AWS_ACCESS_KEY_ID = os.getenv("DIGITAL_OCEAN_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("DIGITAL_OCEAN_SECRET_ACCESS_KEY")
 AWS_STORAGE_BUCKET_NAME = os.getenv("DIGITAL_OCEAN_STORAGE_BUCKET_NAME")
 
 REST_FRAMEWORK = {
@@ -261,4 +267,3 @@ EMAIL_HOST_USER = os.environ.get('AUTHEMAIL_EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('AUTHEMAIL_EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
-

@@ -54,11 +54,17 @@ class CollectionSerializer(serializers.ModelSerializer):
 
 class LendingSerializer(serializers.ModelSerializer):
     organization = serializers.ReadOnlyField(source='organization.name')
-    # customer = CustomerSerializer(source='customer', read_only=True)
+    due_at = serializers.ReadOnlyField()
+    is_past_due = serializers.ReadOnlyField()
     def to_representation(self, instance):
         self.fields['book'] = BookSerializer(read_only=False)
         self.fields['customer'] = CustomerSerializer(read_only=False)
         return super(LendingSerializer, self).to_representation(instance)
+
+    def return_book(self, instance, returned_at):
+        instance.returned_at = returned_at
+        instance.save()
+        return self.to_representation(instance)
 
     class Meta:
         model = Lending
@@ -66,7 +72,10 @@ class LendingSerializer(serializers.ModelSerializer):
             "organization",
             "allowance_days",
             "lent_at",
+            "due_at",
             "returned_at",
             "book",
             "customer",
+            "is_past_due",
+            "id",
         ]

@@ -23,3 +23,4 @@ sentry-sdk
 django-rest-authemail==2.0.6
 postmarker
 firebase-admin==5.0.3 #To be removed once everything has been migrated
+django-cors-headers

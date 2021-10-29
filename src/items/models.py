@@ -1,3 +1,6 @@
+import datetime
+
+import pytz as pytz
 from django.db import models
 from django.utils.timezone import now
 
@@ -61,3 +64,11 @@ class Lending(models.Model):
     allowance_days = models.IntegerField(unique=False, blank=False, null=False)
     lent_at = models.DateTimeField(default=now)
     returned_at = models.DateTimeField(blank=True, null=True)
+
+    @property
+    def due_at(self):
+        return self.lent_at + datetime.timedelta(days=self.allowance_days)
+
+    @property
+    def is_past_due(self):
+        return self.due_at <= datetime.datetime.utcnow().replace(tzinfo=pytz.utc)

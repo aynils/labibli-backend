@@ -11,6 +11,7 @@ urlpatterns = [
     path(r'categories/', views.CollectionsList.as_view(), name="list_post_collection"),
     path(r'collections/<int:pk>/', views.CollectionDetail.as_view(), name="get_put_patch_delete_collection"),
     path(r'lendings/<int:pk>/', views.LendingDetail.as_view(), name="get_put_patch_delete_lending"),
+    path(r'lendings/<int:pk>/return/', views.ReturnLending.as_view(), name="return_lending"),
     path(r'lendings/', views.LendingsList.as_view(), name="list_post_lending"),
 ]
 

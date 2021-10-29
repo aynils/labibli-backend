@@ -4,6 +4,7 @@ from django.utils.timezone import now
 # Create your models here.
 from accounts.models import Organization
 
+
 class Customer(models.Model):
     organization = models.ForeignKey(to=Organization, on_delete=models.CASCADE)
     is_active = models.BooleanField(default=True)
@@ -17,6 +18,6 @@ class Customer(models.Model):
 
     class Meta:
         unique_together = [
-            ['organization', 'email'],
-            ['organization', 'phone'],
+            ['organization', 'first_name', 'last_name', 'email'],
+            ['organization', 'first_name', 'last_name', 'phone'],
         ]

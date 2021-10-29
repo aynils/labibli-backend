@@ -1,4 +1,8 @@
-from rest_framework import generics, permissions
+import datetime
+
+from rest_framework import generics, permissions, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
 
 from items.models import Book, Collection, Lending, Category
 from items.serializers import BookSerializer, CollectionSerializer, LendingSerializer, CategorySerializer
@@ -66,13 +70,24 @@ class LendingDetail(generics.RetrieveUpdateDestroyAPIView):
         )
 
 
+class ReturnLending(APIView):
+    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfOrganization]
+    queryset = Lending.objects.all()
+
+    def post(self, request, pk):
+        lending = Lending.objects.get(id=pk)
+        serializer = LendingSerializer()
+        today = datetime.datetime.today()
+        updated_lending = serializer.return_book(lending, returned_at=today)
+        return Response(updated_lending, status.HTTP_200_OK)
+
 class LendingsList(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfAnOrganization]
     serializer_class = LendingSerializer
 
     def get_queryset(self):
         user = self.request.user
-        return Lending.objects.filter(organization=user.employee_of_organization)
+        return Lending.objects.filter(organization=user.employee_of_organization, returned_at__isnull=True)
 
     def perform_create(self, serializer):
         user = self.request.user
