@@ -326,6 +326,17 @@ class LendingTests(APITestCase):
         self.assertEqual(response.json().get('customer').get('email'), self.customer.email)
         self.assertEqual(response.json().get('organization'), self.organization.name)
 
+    def test_return_lending(self):
+        """
+        Ensure lendings can be returned
+        """
+        authenticate_user(self)
+        url = reverse('return_lending', kwargs={"pk": 1})
+        data = {}
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(response.json().get('returned_at'))
+
     def test_post_lending_anonymous(self):
         """
         Ensure lendings cannot be created by anonymous users
