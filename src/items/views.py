@@ -1,8 +1,9 @@
 import datetime
 
 from rest_framework import generics, permissions, status
-from rest_framework.views import APIView
+from rest_framework.decorators import api_view, authentication_classes
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from items.models import Book, Collection, Lending, Category
 from items.serializers import BookSerializer, CollectionSerializer, LendingSerializer, CategorySerializer
@@ -81,6 +82,7 @@ class ReturnLending(APIView):
         updated_lending = serializer.return_book(lending, returned_at=today)
         return Response(updated_lending, status.HTTP_200_OK)
 
+
 class LendingsList(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfAnOrganization]
     serializer_class = LendingSerializer
@@ -117,3 +119,10 @@ class CategoriesList(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         user = self.request.user
         serializer.save(organization=user.employee_of_organization)
+
+
+@api_view(['GET'])
+@authentication_classes(permissions.IsAuthenticated)
+def book_lookup(request, isbn):
+    result = find_book_details(isbn)
+    return Response(result, status.HTTP_200_OK)
