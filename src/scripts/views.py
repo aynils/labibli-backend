@@ -274,7 +274,7 @@ def import_books() -> dict:
                         isbn=item._data.get('isbn') or None,
                         publisher=item._data.get('publisher'),
                         lang=item._data.get('lang'),
-                        published_year=item._data.get('publishedYear'),
+                        published_year=item._data.get('publishYear'),
                         description=item._data.get('description'),
                         inventory=item._data.get('inventory'),
                     )
