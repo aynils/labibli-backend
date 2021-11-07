@@ -63,7 +63,7 @@ class Book(models.Model):
     inventory = models.IntegerField(unique=False, blank=True, null=True)
     published_year = models.IntegerField(unique=False, blank=True, null=True)
     description = models.TextField(unique=False, blank=True, null=True)
-    categories = models.ManyToManyField(Category, blank=True)
+    categories = models.ManyToManyField(Category, blank=True, null=True)
     collections = models.ManyToManyField(Collection, blank=True)
 
     class Meta:

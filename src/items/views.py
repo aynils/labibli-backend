@@ -1,10 +1,14 @@
 import datetime
+import dataclasses
+
+from django.http import HttpResponse
 
 from rest_framework import generics, permissions, status
-from rest_framework.decorators import api_view, authentication_classes
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from items.book_lookup import find_book_details, download_image
 from items.models import Book, Collection, Lending, Category
 from items.serializers import BookSerializer, CollectionSerializer, LendingSerializer, CategorySerializer
 from labibli import permissions as custom_permissions
@@ -122,7 +126,29 @@ class CategoriesList(generics.ListCreateAPIView):
 
 
 @api_view(['GET'])
-@authentication_classes(permissions.IsAuthenticated)
-def book_lookup(request, isbn):
-    result = find_book_details(isbn)
-    return Response(result, status.HTTP_200_OK)
+@permission_classes([permissions.IsAuthenticated])
+def book_lookup(request):
+    isbn = request.GET.get('isbn')
+    if isbn:
+        result = find_book_details(isbn=isbn)
+        if result:
+            return Response(dataclasses.asdict(result), status.HTTP_200_OK)
+        else:
+            return Response(status=404)
+    else:
+        return Response({"error": "missing ISBN"},status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def fetch_image(request):
+    url = request.GET.get('image_url')
+    if url:
+        result = download_image(url=url)
+        if result:
+            # return Response(result, status.HTTP_200_OK)
+            return HttpResponse(result, content_type="image/png")
+        else:
+            return Response(status=404)
+    else:
+        return Response({"error": "missing url"},status.HTTP_400_BAD_REQUEST)

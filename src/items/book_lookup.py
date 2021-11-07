@@ -70,14 +70,14 @@ def get_open_library_book_information(isbn: str) -> dict or None:
 
 def get_wikipedia_book_information(isbn: str) -> dict or None:
     params = {}
-    url = f"{WIKIPEDIA_URL}/{isbn}"
+    url = f"{WIKIPEDIA_URL}{isbn}"
     response = requests.get(url=url, params=params)
     if response.status_code == 200 and response.json():
         volume = response.json()[0]
         if volume:
             authors = [f"{author[0]} {author[1]}" for author in volume.get('authors', [])]
             publishers = [publisher.name for publisher in volume.get('publishers', [])]
-            cover_id = volume.get('covers', [])[0]
+            # cover_id = volume.get('covers', [])[0]
             return {
                 "title": volume.get('title'),
                 "isbn": isbn,
@@ -112,12 +112,14 @@ def get_cover(isbn: str) -> str:
         return open_library_cover
     return get_les_librairies_cover(isbn=isbn)
 
+
 def get_book_information(isbn: str):
     wikipedia_book = get_wikipedia_book_information(isbn=isbn)
     if wikipedia_book:
         if not wikipedia_book.get('description'):
             google_book = get_google_book_information(isbn=isbn)
-            wikipedia_book['description'] = google_book.get('description')
+            if google_book:
+                wikipedia_book['description'] = google_book.get('description')
         return wikipedia_book
     google_book = get_google_book_information(isbn=isbn)
     if google_book:
@@ -126,17 +128,23 @@ def get_book_information(isbn: str):
 
 
 def find_book_details(isbn: str) -> BookDetails:
-    book = get_open_library_book_information(isbn=isbn)
+    book = get_book_information(isbn=isbn)
     cover = get_cover(isbn=isbn)
 
-    return BookDetails(
-        isbn=isbn,
-        title=book.get('title'),
-        picture=cover or book.get('cover'),
-        author=book.get('author'),
-        publisher=book.get('publisher'),
-        published_year=book.get('published_year'),
-        description=book.get('description'),
-        page_count=book.get('page_count'),
-        language=book.get('language'),
-    )
+    if book:
+        return BookDetails(
+            isbn=isbn,
+            title=book.get('title'),
+            picture=cover or book.get('cover'),
+            author=book.get('author'),
+            publisher=book.get('publisher'),
+            published_year=book.get('published_year'),
+            description=book.get('description'),
+            page_count=book.get('page_count'),
+            language=book.get('language'),
+        )
+
+def download_image(url: str):
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.content

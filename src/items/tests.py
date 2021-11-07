@@ -11,7 +11,7 @@ from helpers.tests import (authenticate_user,
                            create_lending,
                            create_customer,
                            create_category,
-                           generate_photo_file
+                           generate_photo_file,
                            )
 from items.models import Book
 
@@ -54,7 +54,23 @@ new_book = {
     "lang": "fr",
     "published_year": "2019",
     "description": "This is a wonderful book",
+    "categories": []
 }
+
+find_book_details_test_data = [
+    {
+        "isbn": "9782897113148",
+        "title": "Les saveurs gastronomiques de la bière",
+        "picture": "https://images.leslibraires.ca/books/9782897113148/front/9782897113148_large.jpg",
+    },
+    {
+        "isbn": "9780980200447",
+        "title": "Slow reading",
+        "picture": "http://covers.openlibrary.org/b/isbn/9780980200447-L.jpg?default=false",
+    }
+]
+
+TEST_PICTURE_URL = "https://images.leslibraires.ca/books/9782897113148/front/9782897113148_large.jpg"
 
 
 class BookTests(APITestCase):
@@ -139,7 +155,6 @@ class BookTests(APITestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-
     def test_update_book(self):
         authenticate_user(self)
         url = reverse('get_put_patch_delete_book', kwargs={"pk": 1})
@@ -220,7 +235,6 @@ class CollectionTests(APITestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.json().get('name'), "New collection name")
-        self.assertEqual(response.json().get('organization'), self.organization.name)
 
     def test_post_collection_anonymous(self):
         """
@@ -230,7 +244,6 @@ class CollectionTests(APITestCase):
         data = {"name": "New collection name"}
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
 
 
 class LendingTests(APITestCase):
@@ -392,8 +405,6 @@ class CategoryTests(APITestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.json().get('name'), "New category name")
-        self.assertEqual(response.json().get('organization'), self.organization.name)
-
 
     def test_post_category_anonymous(self):
         """
@@ -440,4 +451,38 @@ class CategoryTests(APITestCase):
         authenticate_user(self)
         url = reverse('list_post_category')
         response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class FindBookTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = create_user()
+        cls.organization = create_organization(owner=cls.user)
+
+    def setUp(self):
+        pass
+
+    def test_get_book_details(self):
+        """
+        Ensure book details are returned
+        """
+        authenticate_user(self)
+        url = reverse('get_book_details')
+        for book in find_book_details_test_data:
+            data = {"isbn": book.get('isbn')}
+            response = self.client.get(url, data)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(response.json().get('title'), book.get('title'))
+            self.assertEqual(response.json().get('isbn'), book.get('isbn'))
+            self.assertEqual(response.json().get('picture'), book.get('picture'))
+
+    def test_get_image_file(self):
+        """
+        Ensure image file is returned
+        """
+        authenticate_user(self)
+        url = reverse('get_picture_file')
+        data = {"image_url": TEST_PICTURE_URL}
+        response = self.client.get(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
