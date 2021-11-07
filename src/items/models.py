@@ -39,6 +39,7 @@ class Collection(models.Model):
     name = models.CharField(max_length=255, unique=False, blank=False, null=False)
     archived = models.BooleanField(default=False)
     public = models.BooleanField(default=True)
+    slug = models.CharField(max_length=255, unique=False, blank=False, null=False)
 
 
 class Book(models.Model):
@@ -63,7 +64,7 @@ class Book(models.Model):
     inventory = models.IntegerField(unique=False, blank=True, null=True)
     published_year = models.IntegerField(unique=False, blank=True, null=True)
     description = models.TextField(unique=False, blank=True, null=True)
-    categories = models.ManyToManyField(Category, blank=True, null=True)
+    categories = models.ManyToManyField(Category, blank=True)
     collections = models.ManyToManyField(Collection, blank=True)
 
     class Meta:

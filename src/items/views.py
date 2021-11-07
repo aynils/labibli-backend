@@ -2,7 +2,6 @@ import datetime
 import dataclasses
 
 from django.http import HttpResponse
-
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -39,7 +38,7 @@ class BookDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 class CollectionDetail(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [custom_permissions.AllowSafeOrEmployeeOfOrganization]
+    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfOrganization]
     queryset = Collection.objects.all()
     serializer_class = CollectionSerializer
 
@@ -48,6 +47,13 @@ class CollectionDetail(generics.RetrieveUpdateDestroyAPIView):
             owner=self.request.user,
             organization=self.request.user.employee_of_organization
         )
+
+
+class CollectionShared(generics.RetrieveAPIView):
+    permission_classes = [permissions.AllowAny]
+    lookup_field = "slug"
+    queryset = Collection.objects.all()
+    serializer_class = CollectionSerializer
 
 
 class CollectionsList(generics.ListCreateAPIView):
@@ -136,7 +142,7 @@ def book_lookup(request):
         else:
             return Response(status=404)
     else:
-        return Response({"error": "missing ISBN"},status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "missing ISBN"}, status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET'])
@@ -146,9 +152,8 @@ def fetch_image(request):
     if url:
         result = download_image(url=url)
         if result:
-            # return Response(result, status.HTTP_200_OK)
             return HttpResponse(result, content_type="image/png")
         else:
             return Response(status=404)
     else:
-        return Response({"error": "missing url"},status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "missing url"}, status.HTTP_400_BAD_REQUEST)

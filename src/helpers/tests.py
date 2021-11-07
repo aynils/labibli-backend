@@ -53,10 +53,11 @@ def create_organization(owner):
     return organization
 
 
-def create_collection(organization):
+def create_collection(organization, slug):
     collection = Collection.objects.create(
         name='Test Collection',
-        organization=organization
+        organization=organization,
+        slug=slug,
     )
     collection.save()
     return collection

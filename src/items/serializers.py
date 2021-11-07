@@ -27,7 +27,7 @@ class BookSerializer(serializers.ModelSerializer):
         return response
 
     def update(self, instance, validated_data):
-        categories = validated_data.get('categories',[])
+        categories = validated_data.pop('categories',[])
         categories_ids = [category.get('id') for category in categories]
         instance.categories.set(Category.objects.filter(id__in=categories_ids))
 
@@ -38,6 +38,9 @@ class BookSerializer(serializers.ModelSerializer):
         categories_ids = [category.get('id') for category in categories]
         instance = Book.objects.create(**validated_data)
         instance.categories.set(Category.objects.filter(id__in=categories_ids))
+        instance.collections.set(Collection.objects.filter(
+            organization=self.context.get('request').user.employee_of_organization
+        ))
         instance.save()
 
         return instance
@@ -73,7 +76,8 @@ class CollectionSerializer(serializers.ModelSerializer):
             "name",
             "organization",
             "books",
-            "book_set"
+            "book_set",
+            "slug",
         ]
 
 

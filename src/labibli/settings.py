@@ -162,9 +162,9 @@ WSGI_APPLICATION = 'labibli.wsgi.application'
 
 # Transactional emails
 EMAIL_BACKEND = 'postmarker.django.EmailBackend'
-DEFAULT_FROM_EMAIL = 'no-reply@qiiro.eu'
+DEFAULT_FROM_EMAIL = 'no-reply@labibli.com'
 POSTMARK = {
-    'TOKEN': 'aad541b6-b203-4b80-afb8-d31e160c3426',
+    'TOKEN': os.getenv('AUTHEMAIL_EMAIL_HOST_USER'),
     'TEST_MODE': False,
     'VERBOSITY': 0,
 }

@@ -9,6 +9,7 @@ User = get_user_model()
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('account/', include('django.contrib.auth.urls')),
     path('api/users/', include('authemail.urls')),
     path('api/accounts/', include('accounts.urls')),
     path('api/items/', include('items.urls')),

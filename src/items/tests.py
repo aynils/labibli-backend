@@ -173,7 +173,8 @@ class CollectionTests(APITestCase):
         cls.admin_organization = create_organization(owner=cls.admin_user)
         cls.books = []
 
-        cls.collection = create_collection(cls.organization)
+        cls.collection = create_collection(cls.organization, slug="collection-slug")
+        create_collection(cls.admin_organization, slug="admin-collection-slug")
 
         for book in books_seed:
             new_book = Book.objects.create(**book, organization=cls.organization)
@@ -186,8 +187,9 @@ class CollectionTests(APITestCase):
 
     def test_get_collection(self):
         """
-        Ensure collections are public
+        Ensure collections are not public
         """
+        authenticate_user(self)
         url = reverse('get_put_patch_delete_collection', kwargs={"pk": 1})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -195,6 +197,17 @@ class CollectionTests(APITestCase):
             response.data.get('books').__len__(),
             self.collection.book_set.all().__len__()
         )
+
+    def test_list_collections(self):
+        """
+        Test list all collections from account
+        """
+        authenticate_user(self)
+        url = reverse('list_post_collections')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data.__len__(), 1)
+        self.assertEqual(response.data[0].get('name'), self.collection.name)
 
     def test_update_collection(self):
         """
@@ -230,8 +243,8 @@ class CollectionTests(APITestCase):
         Ensure collections can be created by an user of the organization the collection belongs to
         """
         authenticate_user(self)
-        url = reverse('list_post_collection')
-        data = {"name": "New collection name"}
+        url = reverse('list_post_collections')
+        data = {"name": "New collection name", "slug": "new-collection-slug"}
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.json().get('name'), "New collection name")
@@ -240,10 +253,23 @@ class CollectionTests(APITestCase):
         """
         Ensure collections cannot be created by anonymous users
         """
-        url = reverse('list_post_collection')
+        url = reverse('list_post_collections')
         data = {"name": "New collection name"}
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_get_collection_shared(self):
+        """
+        Ensure collections are public
+        """
+        url = reverse('get_collection_shared', kwargs={"slug": "collection-slug"})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data.get('slug'), "collection-slug")
+        self.assertEqual(
+            response.data.get('books').__len__(),
+            self.collection.book_set.all().__len__()
+        )
 
 
 class LendingTests(APITestCase):
@@ -259,7 +285,7 @@ class LendingTests(APITestCase):
             new_book = Book.objects.create(**book, organization=cls.organization)
             cls.books.append(new_book)
 
-        cls.collection = create_collection(cls.organization)
+        cls.collection = create_collection(cls.organization, slug="foo")
 
         cls.customer = create_customer(cls.organization)
 
