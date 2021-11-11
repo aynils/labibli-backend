@@ -64,7 +64,7 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [os.path.join(BASE_DIR, "labibli/templates")],
+        "DIRS": [str(APPS_DIR / "templates")],
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.debug",
