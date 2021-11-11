@@ -25,7 +25,7 @@ jobs:
     github:
       branch: staging
       deploy_on_push: true
-      repo: Qiiro/webapp
+      repo: aynils/labibli-backend
     instance_count: 1
     instance_size_slug: basic-xxs
     kind: PRE_DEPLOY
@@ -38,7 +38,7 @@ jobs:
     github:
       branch: main
       deploy_on_push: true
-      repo: Qiiro/webapp
+      repo: aynils/labibli-backend
     instance_count: 1
     instance_size_slug: basic-xxs
     kind: PRE_DEPLOY
