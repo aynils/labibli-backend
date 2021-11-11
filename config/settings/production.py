@@ -73,7 +73,7 @@ AWS_STORAGE_BUCKET_NAME = "labibli-s3"
 EMAIL_BACKEND = "postmarker.django.EmailBackend"
 DEFAULT_FROM_EMAIL = "no-reply@labibli.com"
 POSTMARK = {
-    "TOKEN": env("AUTHEMAIL_EMAIL_HOST_USER"),
+    "TOKEN": env("POSTMARK_API_KEY"),
     "TEST_MODE": False,
     "VERBOSITY": 0,
 }
