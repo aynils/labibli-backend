@@ -1,3 +1,4 @@
+import django.utils.timezone
 from django.db import models
 
 from src.accounts.models import Organization
@@ -8,5 +9,5 @@ class Subscription(models.Model):
     plan = models.CharField(max_length=255, unique=False, blank=False, null=False)
     interval = models.CharField(max_length=255, unique=False, blank=False, null=False)
     active = models.BooleanField(default=False)
-    created_at = models.DateTimeField(blank=False, null=False)
+    created_at = models.DateTimeField(default=django.utils.timezone.now)
     raw_data = models.JSONField(blank=False, null=False)

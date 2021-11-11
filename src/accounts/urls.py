@@ -17,6 +17,11 @@ urlpatterns = [
         views.OrganizationCurrent.as_view(),
         name="get_current_organization",
     ),
+    path(
+        r"subscription/",
+        views.SubscriptionCurrent.as_view(),
+        name="get_current_subscription",
+    ),
     path(r"users/", views.UserList.as_view()),
     path(r"users/<int:pk>/", views.UserDetail.as_view()),
 ]

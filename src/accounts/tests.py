@@ -7,6 +7,7 @@ from src.helpers.tests import (
     authenticate_admin,
     authenticate_user,
     create_admin_user,
+    create_organization,
     create_user,
 )
 
@@ -16,10 +17,7 @@ class OrganizationTests(APITestCase):
     def setUpTestData(cls):
         cls.user = create_user()
         cls.admin_user = create_admin_user()
-        cls.organization = Organization.objects.create(
-            owner=cls.admin_user,
-            name="Admin organisation",
-        )
+        cls.organization = create_organization(owner=cls.user)
 
     def setUp(self):
         pass
@@ -41,31 +39,37 @@ class OrganizationTests(APITestCase):
         authenticate_admin(self)
         url = reverse("get_put_patch_delete_organizations", kwargs={"pk": 1})
         response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_get_current_organizations(self):
+        authenticate_user(self)
+        url = reverse("get_current_organization")
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json().get("name"), self.organization.name)
+        self.assertEqual(response.data.get("name"), self.organization.name)
 
     def test_get_other_organizations(self):
         """
         Ensure only owner can retrieve an organization
         """
-        authenticate_user(self)
+        authenticate_admin(self)
         url = reverse("get_put_patch_delete_organizations", kwargs={"pk": 1})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_update_organizations(self):
-        authenticate_admin(self)
+        authenticate_user(self)
         url = reverse("get_put_patch_delete_organizations", kwargs={"pk": 1})
         data = {"name": "Test Rename Organization"}
         response = self.client.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json().get("name"), "Test Rename Organization")
+        self.assertEqual(response.data.get("name"), "Test Rename Organization")
 
     def test_update_other_organizations(self):
         """
         Ensure only owner can update an organization
         """
-        authenticate_user(self)
+        authenticate_admin(self)
         url = reverse("get_put_patch_delete_organizations", kwargs={"pk": 1})
         data = {"name": "Test Rename Organization"}
         response = self.client.put(url, data)

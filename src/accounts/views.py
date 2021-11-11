@@ -3,6 +3,8 @@ from rest_framework import generics, permissions
 from src.accounts.models import Organization, User
 from src.accounts.serializers import OrganizationSerializer, UserSerializer
 from src.labibli import permissions as custom_permissions
+from src.payment.models import Subscription
+from src.payment.serializers import SubscriptionSerializer
 
 
 class OrganizationCreate(generics.CreateAPIView):
@@ -29,6 +31,19 @@ class OrganizationCurrent(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user.employee_of_organization
+
+
+class SubscriptionCurrent(generics.RetrieveAPIView):
+    permission_classes = [custom_permissions.IsEmployeeOfOrganization]
+    serializer_class = SubscriptionSerializer
+
+    def get_object(self):
+        organization = self.request.user.employee_of_organization
+        return (
+            Subscription.objects.filter(organization=organization)
+            .order_by("-created_at")
+            .first()
+        )
 
 
 class UserList(generics.ListCreateAPIView):

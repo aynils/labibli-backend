@@ -6,6 +6,7 @@ from PIL import Image
 from src.accounts.models import Organization, User
 from src.customers.models import Customer
 from src.items.models import Category, Collection, Lending
+from src.payment.models import Subscription
 
 
 def authenticate_user(self):
@@ -51,6 +52,18 @@ def create_organization(owner):
     owner.employee_of_organization = organization
     owner.save()
     return organization
+
+
+def create_subscription(organization, active: bool):
+    subscription = Subscription.objects.create(
+        plan="Test Plan",
+        organization=organization,
+        active=active,
+        interval="yearly",
+        raw_data={},
+    )
+    subscription.save()
+    return subscription
 
 
 def create_collection(organization, slug):

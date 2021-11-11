@@ -1,6 +1,7 @@
 """
 With these settings, tests run faster.
 """
+import dj_database_url
 
 from .base import *  # noqa
 from .base import env
@@ -42,15 +43,7 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 # DATABASE
 # ------------------------------------------------------------------------------
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql_psycopg2",
-        "NAME": env("DB_NAME"),
-        "USER": env("DB_USER"),
-        "PASSWORD": env("DB_PASSWORD"),
-        "HOST": env("DB_HOST"),
-        "PORT": env("DB_PORT"),
-        "OPTIONS": {"sslmode": "allow"},
-    }
+    "default": dj_database_url.parse(env("DATABASE_URL")),
 }
 CACHES = {
     "default": {
