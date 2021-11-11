@@ -1,7 +1,6 @@
 venv
 .idea
 .env*
-.digitalocean
 
 *.egg-info
 *.pot
@@ -18,4 +17,3 @@ tests/.coverage
 build/
 tests/report/
 /src/static/
-/src/media/pictures/131454411_141727540808726_773536196597072424_n.png
