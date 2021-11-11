@@ -63,7 +63,7 @@ class BookSerializer(serializers.ModelSerializer):
             "published_year",
             "description",
             "categories",
-            # "collections",
+            "collections",
             "organization",
             "id",
         ]
@@ -71,6 +71,7 @@ class BookSerializer(serializers.ModelSerializer):
 
 class CollectionSerializer(serializers.ModelSerializer):
     organization = serializers.ReadOnlyField(source="organization.name")
+    organization_email = serializers.ReadOnlyField(source="organization.owner.email")
     books = BookSerializer(source="book_set", many=True, read_only=True)
 
     class Meta:
@@ -81,6 +82,7 @@ class CollectionSerializer(serializers.ModelSerializer):
             "books",
             "book_set",
             "slug",
+            "organization_email",
         ]
 
 
