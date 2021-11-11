@@ -1,25 +1,24 @@
 import datetime
 import os
-from uuid import uuid4
 
 import pytz as pytz
 from django.db import models
 from django.utils.timezone import now
 
 # Create your models here.
-from accounts.models import Organization
-from customers.models import Customer
+from src.accounts.models import Organization
+from src.customers.models import Customer
 
 
 def path_and_rename(instance, filename):
-    upload_to = 'covers'
-    ext = filename.split('.')[-1]
+    upload_to = "covers"
+    ext = filename.split(".")[-1]
     # get filename
     if instance.pk:
-        filename = f'{instance.pk}.{ext}'
+        filename = f"{instance.pk}.{ext}"
     else:
         # set filename as random string
-        filename = f'{instance.organization_id}-{instance.title}.{ext}'
+        filename = f"{instance.organization_id}-{instance.title}.{ext}"
     # return the whole path to the file
     return os.path.join(upload_to, filename)
 
@@ -30,7 +29,7 @@ class Category(models.Model):
     archived = models.BooleanField(default=False)
 
     unique_together = [
-        ['name', 'organization'],
+        ["name", "organization"],
     ]
 
 
@@ -54,7 +53,13 @@ class Book(models.Model):
     archived = models.BooleanField(default=False)
     deleted = models.BooleanField(default=False)
     featured = models.BooleanField(default=False)
-    status = models.CharField(max_length=255, blank=False, null=False, choices=Status.choices, default=Status.AVAILABLE)
+    status = models.CharField(
+        max_length=255,
+        blank=False,
+        null=False,
+        choices=Status.choices,
+        default=Status.AVAILABLE,
+    )
     author = models.CharField(max_length=255, unique=False, blank=False, null=False)
     title = models.CharField(max_length=255, unique=False, blank=False, null=False)
     isbn = models.CharField(max_length=255, unique=False, blank=True, null=True)
@@ -69,7 +74,7 @@ class Book(models.Model):
 
     class Meta:
         unique_together = [
-            ['isbn', 'organization', 'title'],
+            ["isbn", "organization", "title"],
         ]
 
 

@@ -2,7 +2,7 @@ from django.db import models
 from django.utils.timezone import now
 
 # Create your models here.
-from accounts.models import Organization
+from src.accounts.models import Organization
 
 
 class Customer(models.Model):
@@ -18,6 +18,6 @@ class Customer(models.Model):
 
     class Meta:
         unique_together = [
-            ['organization', 'first_name', 'last_name', 'email'],
-            ['organization', 'first_name', 'last_name', 'phone'],
+            ["organization", "first_name", "last_name", "email"],
+            ["organization", "first_name", "last_name", "phone"],
         ]

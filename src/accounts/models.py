@@ -1,4 +1,4 @@
-from authemail.models import EmailUserManager, EmailAbstractUser
+from authemail.models import EmailAbstractUser, EmailUserManager
 from django.db import models
 from django.utils.timezone import now
 
@@ -6,7 +6,7 @@ from django.utils.timezone import now
 class User(EmailAbstractUser):
     objects = EmailUserManager()
     employee_of_organization = models.ForeignKey(
-        to='Organization',
+        to="Organization",
         null=True,
         blank=True,
         on_delete=models.DO_NOTHING,

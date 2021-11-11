@@ -1,5 +1,5 @@
-import datetime
 import dataclasses
+import datetime
 
 from django.http import HttpResponse
 from rest_framework import generics, permissions, status
@@ -7,14 +7,22 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from items.book_lookup import find_book_details, download_image
-from items.models import Book, Collection, Lending, Category
-from items.serializers import BookSerializer, CollectionSerializer, LendingSerializer, CategorySerializer
-from labibli import permissions as custom_permissions
+from src.items.book_lookup import download_image, find_book_details
+from src.items.models import Book, Category, Collection, Lending
+from src.items.serializers import (
+    BookSerializer,
+    CategorySerializer,
+    CollectionSerializer,
+    LendingSerializer,
+)
+from src.labibli import permissions as custom_permissions
 
 
 class BooksList(generics.ListCreateAPIView):
-    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfAnOrganization]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        custom_permissions.IsEmployeeOfAnOrganization,
+    ]
     serializer_class = BookSerializer
 
     def get_queryset(self):
@@ -32,20 +40,21 @@ class BookDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BookSerializer
 
     def perform_create(self, serializer):
-        serializer.save(
-            organization=self.request.user.employee_of_organization
-        )
+        serializer.save(organization=self.request.user.employee_of_organization)
 
 
 class CollectionDetail(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfOrganization]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        custom_permissions.IsEmployeeOfOrganization,
+    ]
     queryset = Collection.objects.all()
     serializer_class = CollectionSerializer
 
     def perform_create(self, serializer):
         serializer.save(
             owner=self.request.user,
-            organization=self.request.user.employee_of_organization
+            organization=self.request.user.employee_of_organization,
         )
 
 
@@ -57,7 +66,10 @@ class CollectionShared(generics.RetrieveAPIView):
 
 
 class CollectionsList(generics.ListCreateAPIView):
-    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfAnOrganization]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        custom_permissions.IsEmployeeOfAnOrganization,
+    ]
     serializer_class = CollectionSerializer
 
     def get_queryset(self):
@@ -70,19 +82,25 @@ class CollectionsList(generics.ListCreateAPIView):
 
 
 class LendingDetail(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfOrganization]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        custom_permissions.IsEmployeeOfOrganization,
+    ]
     queryset = Lending.objects.all()
     serializer_class = LendingSerializer
 
     def perform_create(self, serializer):
         serializer.save(
             owner=self.request.user,
-            organization=self.request.user.employee_of_organization
+            organization=self.request.user.employee_of_organization,
         )
 
 
 class ReturnLending(APIView):
-    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfOrganization]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        custom_permissions.IsEmployeeOfOrganization,
+    ]
     queryset = Lending.objects.all()
 
     def post(self, request, pk):
@@ -94,12 +112,17 @@ class ReturnLending(APIView):
 
 
 class LendingsList(generics.ListCreateAPIView):
-    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfAnOrganization]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        custom_permissions.IsEmployeeOfAnOrganization,
+    ]
     serializer_class = LendingSerializer
 
     def get_queryset(self):
         user = self.request.user
-        return Lending.objects.filter(organization=user.employee_of_organization, returned_at__isnull=True)
+        return Lending.objects.filter(
+            organization=user.employee_of_organization, returned_at__isnull=True
+        )
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -107,19 +130,25 @@ class LendingsList(generics.ListCreateAPIView):
 
 
 class CategoryDetail(generics.RetrieveAPIView):
-    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfOrganization]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        custom_permissions.IsEmployeeOfOrganization,
+    ]
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
 
     def perform_create(self, serializer):
         serializer.save(
             owner=self.request.user,
-            organization=self.request.user.employee_of_organization
+            organization=self.request.user.employee_of_organization,
         )
 
 
 class CategoriesList(generics.ListCreateAPIView):
-    permission_classes = [permissions.IsAuthenticated, custom_permissions.IsEmployeeOfAnOrganization]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        custom_permissions.IsEmployeeOfAnOrganization,
+    ]
     serializer_class = CategorySerializer
 
     def get_queryset(self):
@@ -131,10 +160,10 @@ class CategoriesList(generics.ListCreateAPIView):
         serializer.save(organization=user.employee_of_organization)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def book_lookup(request):
-    isbn = request.GET.get('isbn')
+    isbn = request.GET.get("isbn")
     if isbn:
         result = find_book_details(isbn=isbn)
         if result:
@@ -145,10 +174,10 @@ def book_lookup(request):
         return Response({"error": "missing ISBN"}, status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def fetch_image(request):
-    url = request.GET.get('image_url')
+    url = request.GET.get("image_url")
     if url:
         result = download_image(url=url)
         if result:

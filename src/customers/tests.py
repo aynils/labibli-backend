@@ -2,13 +2,14 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from helpers.tests import (authenticate_user,
-                           create_admin_user,
-                           create_user,
-                           create_organization,
-                           authenticate_admin,
-                           create_customer
-                           )
+from helpers.tests import (
+    authenticate_admin,
+    authenticate_user,
+    create_admin_user,
+    create_customer,
+    create_organization,
+    create_user,
+)
 
 
 # Create your tests here.
@@ -31,7 +32,7 @@ class CustomerTests(APITestCase):
         Ensure customers can only be seen by their org
         """
         authenticate_user(self)
-        url = reverse('get_put_patch_delete_customer', kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_customer", kwargs={"pk": 1})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -39,7 +40,7 @@ class CustomerTests(APITestCase):
         """
         Ensure customers can only be seen by their org
         """
-        url = reverse('get_put_patch_delete_customer', kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_customer", kwargs={"pk": 1})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -48,7 +49,7 @@ class CustomerTests(APITestCase):
         Ensure customers can be updated by an user of the organization the collection belongs to
         """
         authenticate_user(self)
-        url = reverse('get_put_patch_delete_customer', kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_customer", kwargs={"pk": 1})
         data = {"name": "New customer name"}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
@@ -57,7 +58,7 @@ class CustomerTests(APITestCase):
         """
         Ensure customers can only be updated by authenticated user
         """
-        url = reverse('get_put_patch_delete_customer', kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_customer", kwargs={"pk": 1})
         data = {"name": "New customer name"}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -67,7 +68,7 @@ class CustomerTests(APITestCase):
         Ensure customers can only be updated by an user of the organization the collection belongs to
         """
         authenticate_admin(self)
-        url = reverse('get_put_patch_delete_customer', kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_customer", kwargs={"pk": 1})
         data = {"name": "New customer name"}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
@@ -77,7 +78,7 @@ class CustomerTests(APITestCase):
         Ensure customers access is limited to the org they belongs to
         """
         authenticate_user(self)
-        url = reverse('list_post_customer')
+        url = reverse("list_post_customer")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -85,7 +86,7 @@ class CustomerTests(APITestCase):
         """
         Ensure customers access is limited to the org they belongs to
         """
-        url = reverse('list_post_customer')
+        url = reverse("list_post_customer")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -94,7 +95,7 @@ class CustomerTests(APITestCase):
         Ensure customers can be created by an user of the organization the collection belongs to
         """
         authenticate_user(self)
-        url = reverse('list_post_customer')
+        url = reverse("list_post_customer")
         data = {
             "first_name": "Jean",
             "last_name": "Petit",
@@ -105,14 +106,14 @@ class CustomerTests(APITestCase):
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.json().get('email'), "jean@petit.be")
-        self.assertEqual(response.json().get('organization'), self.organization.name)
+        self.assertEqual(response.json().get("email"), "jean@petit.be")
+        self.assertEqual(response.json().get("organization"), self.organization.name)
 
     def test_post_customer_anonymous(self):
         """
         Ensure customers cannot be created by anonymous users
         """
-        url = reverse('list_post_customer')
+        url = reverse("list_post_customer")
         data = {
             "first_name": "Jean",
             "last_name": "Petit",

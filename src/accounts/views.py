@@ -1,8 +1,8 @@
 from rest_framework import generics, permissions
-from labibli import permissions as custom_permissions
 
-from accounts.models import Organization, User
-from accounts.serializers import OrganizationSerializer, UserSerializer
+from src.accounts.models import Organization, User
+from src.accounts.serializers import OrganizationSerializer, UserSerializer
+from src.labibli import permissions as custom_permissions
 
 
 class OrganizationCreate(generics.CreateAPIView):

@@ -1,5 +1,8 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
 
 
 class PaymentConfig(AppConfig):
-    name = 'payment'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "src.payment"
+    verbose_name = _("Payment")

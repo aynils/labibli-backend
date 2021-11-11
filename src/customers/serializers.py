@@ -1,10 +1,10 @@
 from rest_framework import serializers
 
-from customers.models import Customer
+from src.customers.models import Customer
 
 
 class CustomerSerializer(serializers.ModelSerializer):
-    organization = serializers.ReadOnlyField(source='organization.name')
+    organization = serializers.ReadOnlyField(source="organization.name")
 
     class Meta:
         model = Customer

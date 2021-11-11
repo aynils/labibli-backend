@@ -1,8 +1,7 @@
 from django.db import models
 
-# Create your models here.
-from customers.models import Customer
-from accounts.models import Organization
+from src.accounts.models import Organization
+from src.customers.models import Customer
 
 
 class Subscription(models.Model):
@@ -13,4 +12,3 @@ class Subscription(models.Model):
     active = models.BooleanField(default=False)
     created_at = models.DateTimeField(blank=False, null=False)
     raw_data = models.JSONField(blank=False, null=False)
-

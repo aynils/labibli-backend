@@ -14,6 +14,5 @@ https://www.digitalocean.com/community/tutorials/how-to-deploy-a-scalable-and-se
 ### Steps
 Update the files in ./k8s to use the right app name (replace `estimer` by your own name, everywhere).
 
-Then follow the steps in the ref doc. I only did it once and it wasn't an easy adventure. 
+Then follow the steps in the ref doc. I only did it once and it wasn't an easy adventure.
 I'll certainely put more details here next time I go through this process.
-

@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
-from customers.serializers import CustomerSerializer
-from items.models import Book, Category, Collection, Lending
+from src.customers.serializers import CustomerSerializer
+from src.items.models import Book, Category, Collection, Lending
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -17,30 +17,34 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class BookSerializer(serializers.ModelSerializer):
-    organization = serializers.ReadOnlyField(source='organization.name')
-    categories = serializers.ListSerializer(child=CategorySerializer(), read_only=False, required=False)
+    organization = serializers.ReadOnlyField(source="organization.name")
+    categories = serializers.ListSerializer(
+        child=CategorySerializer(), read_only=False, required=False
+    )
     isbn = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     def to_representation(self, instance):
         response = super().to_representation(instance)
-        response['categories'] = CategorySerializer(instance.categories, many=True).data
+        response["categories"] = CategorySerializer(instance.categories, many=True).data
         return response
 
     def update(self, instance, validated_data):
-        categories = validated_data.pop('categories',[])
-        categories_ids = [category.get('id') for category in categories]
+        categories = validated_data.pop("categories", [])
+        categories_ids = [category.get("id") for category in categories]
         instance.categories.set(Category.objects.filter(id__in=categories_ids))
 
         return super(BookSerializer, self).update(instance, validated_data)
 
     def create(self, validated_data):
-        categories = validated_data.pop('categories',[])
-        categories_ids = [category.get('id') for category in categories]
+        categories = validated_data.pop("categories", [])
+        categories_ids = [category.get("id") for category in categories]
         instance = Book.objects.create(**validated_data)
         instance.categories.set(Category.objects.filter(id__in=categories_ids))
-        instance.collections.set(Collection.objects.filter(
-            organization=self.context.get('request').user.employee_of_organization
-        ))
+        instance.collections.set(
+            Collection.objects.filter(
+                organization=self.context.get("request").user.employee_of_organization
+            )
+        )
         instance.save()
 
         return instance
@@ -67,8 +71,8 @@ class BookSerializer(serializers.ModelSerializer):
 
 
 class CollectionSerializer(serializers.ModelSerializer):
-    organization = serializers.ReadOnlyField(source='organization.name')
-    books = BookSerializer(source='book_set', many=True, read_only=True)
+    organization = serializers.ReadOnlyField(source="organization.name")
+    books = BookSerializer(source="book_set", many=True, read_only=True)
 
     class Meta:
         model = Collection
@@ -82,13 +86,13 @@ class CollectionSerializer(serializers.ModelSerializer):
 
 
 class LendingSerializer(serializers.ModelSerializer):
-    organization = serializers.ReadOnlyField(source='organization.name')
+    organization = serializers.ReadOnlyField(source="organization.name")
     due_at = serializers.ReadOnlyField()
     is_past_due = serializers.ReadOnlyField()
 
     def to_representation(self, instance):
-        self.fields['book'] = BookSerializer(read_only=False)
-        self.fields['customer'] = CustomerSerializer(read_only=False)
+        self.fields["book"] = BookSerializer(read_only=False)
+        self.fields["customer"] = CustomerSerializer(read_only=False)
         return super(LendingSerializer, self).to_representation(instance)
 
     def return_book(self, instance, returned_at):

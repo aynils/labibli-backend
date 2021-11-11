@@ -19,7 +19,7 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
 class IsOwner(permissions.BasePermission):
     """
     Custom permission to only allow owners of an object to access it.
-    /!\ Not working on lists
+    ! Not working on lists
     """
 
     def has_object_permission(self, request, view, obj):
@@ -29,7 +29,7 @@ class IsOwner(permissions.BasePermission):
 class IsSelf(permissions.BasePermission):
     """
     Custom permission to only allow user to access itself.
-    /!\ Not working on lists
+    ! Not working on lists
     """
 
     def has_object_permission(self, request, view, obj):
@@ -39,7 +39,7 @@ class IsSelf(permissions.BasePermission):
 class IsEmployeeOfOrganization(permissions.BasePermission):
     """
     Custom permission to only allow employees of an organization to access objects from this organization.
-    /!\ Not working on lists
+    ! Not working on lists
     """
 
     def has_object_permission(self, request, view, obj):
@@ -54,15 +54,15 @@ class IsEmployeeOfAnOrganization(permissions.BasePermission):
 class AllowSafeOrEmployeeOfOrganization(permissions.BasePermission):
     """
     Custom permission to only allow employees of an organization to update objects from this organization.
-    /!\ Not working on lists
+    ! Not working on lists
     """
 
     def has_permission(self, request, view):
         if (
-                request.method in permissions.SAFE_METHODS
-                or request.user
-                and request.user.is_authenticated
-                and request.user.employee_of_organization
+            request.method in permissions.SAFE_METHODS
+            or request.user
+            and request.user.is_authenticated
+            and request.user.employee_of_organization
         ):
             return True
 
@@ -70,6 +70,6 @@ class AllowSafeOrEmployeeOfOrganization(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         return (
-                request.method in permissions.SAFE_METHODS
-                or request.user.employee_of_organization == obj.organization
+            request.method in permissions.SAFE_METHODS
+            or request.user.employee_of_organization == obj.organization
         )
