@@ -16,9 +16,10 @@ from src.customers.models import Customer
 from src.items.models import Book, Category, Collection, Lending
 
 DEFAULT_PICTURE_PLACEHOLDER = (
-    "https://firebasestorage.googleapis.com/"
-    "v0/b/biblio-44466.appspot.com/o/aW1hZ2UucG5nV2VkIEFwciAyOCAyMDIxIDE0OjI5OjU1IEdNVC0wMzAwIChoZXVyZSBhdmFuY8OpZSBk"
-    "ZSBs4oCZQXRsYW50aXF1ZSk%3D?alt=media&token=a7be9af5-3072-4040-a0d8-2870d0cc3d9e"
+    "https://sfo3.digitaloceanspaces.com/labibli-s3/pictures/"
+    "4916.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=BGLZPAXQMT7H2HGFREQI%2F20211107%2Fsfo3%2Fs3%2"
+    "Faws4_request&X-Amz-Date=20211107T214553Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host"
+    "&X-Amz-Signature=630b9a090fbd47165367a45bc2d19ca50b27af1349abb1995af89980da5863c4"
 )
 
 home = str(Path.home())

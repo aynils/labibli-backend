@@ -22,16 +22,16 @@ if (
     DATABASES = {
         "default": dj_database_url.parse(env("DATABASE_URL")),
     }
-    CACHES = {
-        "default": {
-            "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": env("CACHE_URL"),
-            "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            },
-            "KEY_PREFIX": "production",
-        }
-    }
+    # CACHES = {
+    #     "default": {
+    #         "BACKEND": "django_redis.cache.RedisCache",
+    #         "LOCATION": env("CACHE_URL"),
+    #         "OPTIONS": {
+    #             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+    #         },
+    #         "KEY_PREFIX": "production",
+    #     }
+    # }
 
 # ERRORS LOGGING
 sentry_sdk.init(
