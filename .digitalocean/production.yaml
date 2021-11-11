@@ -23,7 +23,7 @@ jobs:
         scope: BUILD_TIME
         value: "1"
     github:
-      branch: staging
+      branch: main
       deploy_on_push: true
       repo: aynils/labibli-backend
     instance_count: 1
