@@ -20,7 +20,6 @@ books_seed = [
     {
         "archived": False,
         "featured": False,
-        "status": "available",
         "author": "Marcel",
         "title": "L'amour de la bière",
         "isbn": "1234567890123",
@@ -32,7 +31,6 @@ books_seed = [
     {
         "archived": False,
         "featured": False,
-        "status": "available",
         "author": "Marcel",
         "title": "L'amour de la bière 2",
         "isbn": "9234567890123",
@@ -47,7 +45,6 @@ books_seed = [
 new_book = {
     "archived": False,
     "featured": False,
-    "status": "available",
     "author": "Marcel",
     "title": "L'amour de la bière 3",
     "isbn": "8234567890123",
