@@ -31,6 +31,19 @@ jobs:
     kind: PRE_DEPLOY
     name: migrate
     run_command: python manage.py migrate
+  - envs:
+    - key: DISABLE_COLLECTSTATIC
+      scope: BUILD_TIME
+      value: "1"
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: Qiiro/webapp
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    kind: PRE_DEPLOY
+    name: test
+    run_command: python manage.py test
 name: labibli-backend-production
 region: tor
 services:
