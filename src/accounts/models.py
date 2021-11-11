@@ -18,3 +18,7 @@ class Organization(models.Model):
     created_at = models.DateTimeField(default=now)
     name = models.CharField(max_length=255, unique=False, blank=False, null=False)
     owner = models.ForeignKey(to=User, on_delete=models.DO_NOTHING)
+
+    @property
+    def is_subscribed(self):
+        return True
