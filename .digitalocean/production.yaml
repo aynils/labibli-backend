@@ -17,6 +17,10 @@ envs:
   - key: DATABASE_URL
     scope: RUN_AND_BUILD_TIME
     value: ${db.DATABASE_URL}
+  - key: DJANGO_SECRET_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:U/ptmdtv7sG4RL4nVrF7mIuTaLwIFPe7:QAQwaiJPtVxqwZmuocxMItfBKdvbbJvkQn2b1erOndAtoz3QWEMD/K9icAerVchIQRkW0o8QMZ9Qityv/P3lrqhb2GhwRSbuiHW6Ht+Ki6nXLdym0b/5dsMlpWYXmamwRQRj27Qa5hwgZ+iTA1WvowJ6gQ==]
 jobs:
   - envs:
       - key: DISABLE_COLLECTSTATIC
@@ -32,9 +36,9 @@ jobs:
     name: migrate
     run_command: python manage.py migrate
   - envs:
-    - key: DISABLE_COLLECTSTATIC
-      scope: BUILD_TIME
-      value: "1"
+      - key: DISABLE_COLLECTSTATIC
+        scope: BUILD_TIME
+        value: "1"
     github:
       branch: main
       deploy_on_push: true
