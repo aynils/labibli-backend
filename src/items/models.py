@@ -53,13 +53,13 @@ class Book(models.Model):
     archived = models.BooleanField(default=False)
     deleted = models.BooleanField(default=False)
     featured = models.BooleanField(default=False)
-    status = models.CharField(
-        max_length=255,
-        blank=False,
-        null=False,
-        choices=Status.choices,
-        default=Status.AVAILABLE,
-    )
+    # status = models.CharField(
+    #     max_length=255,
+    #     blank=False,
+    #     null=False,
+    #     choices=Status.choices,
+    #     default=Status.AVAILABLE,
+    # )
     author = models.CharField(max_length=255, unique=False, blank=False, null=False)
     title = models.CharField(max_length=255, unique=False, blank=False, null=False)
     isbn = models.CharField(max_length=255, unique=False, blank=True, null=True)
@@ -72,6 +72,14 @@ class Book(models.Model):
     categories = models.ManyToManyField(Category, blank=True)
     collections = models.ManyToManyField(Collection, blank=True)
 
+    @property
+    def status(self):
+        is_borrowed = Lending.objects.filter(book=self, returned_at__isnull=True)
+        if is_borrowed:
+            return "borrowed"
+        else:
+            return "available"
+
     class Meta:
         unique_together = [
             ["isbn", "organization", "title"],
@@ -82,7 +90,9 @@ class Lending(models.Model):
     organization = models.ForeignKey(to=Organization, on_delete=models.CASCADE)
     customer = models.ForeignKey(to=Customer, on_delete=models.CASCADE)
     book = models.ForeignKey(to=Book, on_delete=models.CASCADE)
-    allowance_days = models.IntegerField(unique=False, blank=False, null=False)
+    allowance_days = models.IntegerField(
+        unique=False, blank=True, null=False, default=31
+    )
     lent_at = models.DateTimeField(default=now)
     returned_at = models.DateTimeField(blank=True, null=True)
 

@@ -54,3 +54,11 @@ DEBUG_TOOLBAR_CONFIG = {
 }
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# Store images on Digital Ocean S3
+DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+AWS_S3_REGION_NAME = "sfo3"
+AWS_S3_ENDPOINT_URL = f"https://{AWS_S3_REGION_NAME}.digitaloceanspaces.com"
+AWS_ACCESS_KEY_ID = "BGLZPAXQMT7H2HGFREQI"
+AWS_SECRET_ACCESS_KEY = env("DIGITAL_OCEAN_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = "labibli-s3"

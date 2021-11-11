@@ -5,7 +5,6 @@ from src.items.models import Book, Category, Collection, Lending
 
 
 class CategorySerializer(serializers.ModelSerializer):
-    # organization = serializers.ReadOnlyField(source='organization.name')
     id = serializers.CharField(max_length=255, required=False)
 
     class Meta:

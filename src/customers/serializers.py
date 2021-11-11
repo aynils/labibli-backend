@@ -17,4 +17,5 @@ class CustomerSerializer(serializers.ModelSerializer):
             "phone",
             "language",
             "note",
+            "id",
         ]
