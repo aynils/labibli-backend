@@ -16,7 +16,7 @@ envs:
     value: config.settings.production
   - key: DATABASE_URL
     scope: RUN_AND_BUILD_TIME
-    value: ${db.DB_URL}
+    value: ${db.DATABASE_URL}
 jobs:
   - envs:
       - key: DISABLE_COLLECTSTATIC
