@@ -7,4 +7,5 @@ django-rest-authemail==2.1.0
 django-storages[boto3]==1.12.3
 django-environ==0.8.1
 django-cors-headers==3.10.0
+psycopg2==2.9.1
 firebase-admin==5.0.3 #To be removed once everything has been migrated
