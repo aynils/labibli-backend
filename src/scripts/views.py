@@ -5,6 +5,7 @@ from typing import List
 
 import firebase_admin
 import requests
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import IntegrityError
 from django.http import HttpResponse
@@ -24,7 +25,7 @@ DEFAULT_PICTURE_PLACEHOLDER = (
 
 home = str(Path.home())
 GOOGLE_SERVICE_ACCOUNT_JSON_PATH = os.path.join(
-    home, "dev", "labibli", "google_service_account.json"
+    settings.BASE_DIR, "google_service_account.json"
 )
 cred = credentials.Certificate(GOOGLE_SERVICE_ACCOUNT_JSON_PATH)
 firebase_admin.initialize_app(cred)
