@@ -15,7 +15,7 @@ CONFIG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Take environment variables from .env file
 environ.Env.read_env(os.path.join(CONFIG_DIR, ".env"))
 
-SECRET_KEY = env("DJANGO_SECRET_KEY", default="collectstatic_mode")
+SECRET_KEY = env("DJANGO_SECRET_KEY")
 
 
 CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]
