@@ -10,7 +10,12 @@ urlpatterns = [
     path(
         r"organizations/<int:pk>/",
         views.OrganizationDetail.as_view(),
-        name="get_put_patch_delete_organizations",
+        name="put_patch_delete_organizations",
+    ),
+    path(
+        r"organization/",
+        views.OrganizationCurrent.as_view(),
+        name="get_current_organization",
     ),
     path(r"users/", views.UserList.as_view()),
     path(r"users/<int:pk>/", views.UserDetail.as_view()),

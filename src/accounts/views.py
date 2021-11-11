@@ -23,6 +23,14 @@ class OrganizationDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = OrganizationSerializer
 
 
+class OrganizationCurrent(generics.RetrieveAPIView):
+    permission_classes = [custom_permissions.IsOwner]
+    serializer_class = OrganizationSerializer
+
+    def get_object(self):
+        return self.request.user.employee_of_organization
+
+
 class UserList(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAdminUser]
     queryset = User.objects.all()
