@@ -17,8 +17,6 @@ SMARTDOCS_API_BASE_PATH = "https://api.qiiro.eu"
 if (
     len(sys.argv) > 0 and sys.argv[1] != "collectstatic"
 ):  # do not set cache and DB for static collection job
-    if env("DATABASE_URL", None) is None:
-        raise Exception("DATABASE_URL environment variable not defined")
     DATABASES = {
         "default": dj_database_url.parse(env("DATABASE_URL")),
     }
@@ -61,3 +59,33 @@ LOGGING = {
         },
     },
 }
+
+# Store images on Digital Ocean S3
+DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+AWS_S3_REGION_NAME = "sfo3"
+AWS_S3_ENDPOINT_URL = f"https://{AWS_S3_REGION_NAME}.digitaloceanspaces.com"
+AWS_ACCESS_KEY_ID = "BGLZPAXQMT7H2HGFREQI"
+AWS_SECRET_ACCESS_KEY = env("DIGITAL_OCEAN_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = "labibli-s3"
+
+
+# Transactional emails
+EMAIL_BACKEND = "postmarker.django.EmailBackend"
+DEFAULT_FROM_EMAIL = "no-reply@labibli.com"
+POSTMARK = {
+    "TOKEN": env("AUTHEMAIL_EMAIL_HOST_USER"),
+    "TEST_MODE": False,
+    "VERBOSITY": 0,
+}
+
+
+# Auth email config
+EMAIL_FROM = "seraphin@aynils.ca"
+EMAIL_BCC = "seraphin@aynils.ca"
+
+EMAIL_HOST = "smtp.postmarkapp.com"
+EMAIL_PORT = "587"
+EMAIL_HOST_USER = env("POSTMARK_API_KEY")
+EMAIL_HOST_PASSWORD = env("POSTMARK_API_KEY")
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False

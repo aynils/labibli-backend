@@ -78,15 +78,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-# Transactional emails
-EMAIL_BACKEND = "postmarker.django.EmailBackend"
-DEFAULT_FROM_EMAIL = "no-reply@labibli.com"
-POSTMARK = {
-    "TOKEN": env("AUTHEMAIL_EMAIL_HOST_USER"),
-    "TEST_MODE": False,
-    "VERBOSITY": 0,
-}
-
 
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
@@ -128,13 +119,6 @@ STATIC_ROOT = os.path.join(BASE_DIR, "static/")
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media/")
 
-# Store images on Digital Ocean S3
-DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
-AWS_S3_REGION_NAME = env("DIGITAL_OCEAN_REGION_NAME")
-AWS_S3_ENDPOINT_URL = f"https://{AWS_S3_REGION_NAME}.digitaloceanspaces.com"
-AWS_ACCESS_KEY_ID = env("DIGITAL_OCEAN_KEY_ID")
-AWS_SECRET_ACCESS_KEY = env("DIGITAL_OCEAN_SECRET_ACCESS_KEY")
-AWS_STORAGE_BUCKET_NAME = env("DIGITAL_OCEAN_STORAGE_BUCKET_NAME")
 
 REST_FRAMEWORK = {
     # Use Django's standard `django.contrib.auth` permissions,
@@ -154,18 +138,4 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.LimitOffsetPagination",
 }
 
-AUTH_EMAIL_VERIFICATION = True
-
-# Email settings
-# https://docs.djangoproject.com/en/3.1/topics/email/
-# https://docs.djangoproject.com/en/3.1/ref/settings/#email-host
-
-EMAIL_FROM = os.environ.get("AUTHEMAIL_DEFAULT_EMAIL_FROM")
-EMAIL_BCC = os.environ.get("AUTHEMAIL_DEFAULT_EMAIL_BCC")
-
-EMAIL_HOST = os.environ.get("AUTHEMAIL_EMAIL_HOST")
-EMAIL_PORT = os.environ.get("AUTHEMAIL_EMAIL_PORT")
-EMAIL_HOST_USER = os.environ.get("AUTHEMAIL_EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.environ.get("AUTHEMAIL_EMAIL_HOST_PASSWORD")
-EMAIL_USE_TLS = True
-EMAIL_USE_SSL = False
+AUTH_EMAIL_VERIFICATION = False
