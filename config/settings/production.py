@@ -24,7 +24,7 @@ if (
 
 # ERRORS LOGGING
 sentry_sdk.init(
-    dsn="https://73519869467d49c9b719cc3bca1309eb@o572238.ingest.sentry.io/5721358",
+    dsn="https://36ffea1b29ac488ea1992ed6e43eb500@o413315.ingest.sentry.io/5973618",
     integrations=[DjangoIntegration()],
     environment=DJANGO_ENV,
     # Set traces_sample_rate to 1.0 to capture 100%
