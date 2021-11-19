@@ -7,12 +7,12 @@ from sentry_sdk.integrations.django import DjangoIntegration
 from .base import *  # noqa
 from .base import env
 
-DEBUG = True
+DEBUG = False
 DJANGO_ENV = "PRODUCTION"
 
-ALLOWED_HOSTS = ["app.qiiro.eu", "webapp-production-9j96q.ondigitalocean.app"]
-
-SMARTDOCS_API_BASE_PATH = "https://api.qiiro.eu"
+ALLOWED_HOSTS = [
+    "api.labibli.com",
+]
 
 if (
     len(sys.argv) > 0 and sys.argv[1] != "collectstatic"
