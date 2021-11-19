@@ -8,7 +8,7 @@ databases:
     size: db-s-dev-database
     version: "12"
 domains:
-  - domain: app.labibli.com
+  - domain: api.labibli.com
     type: PRIMARY
 envs:
   - key: DJANGO_SETTINGS_MODULE
