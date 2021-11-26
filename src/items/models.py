@@ -2,6 +2,7 @@ import datetime
 import os
 
 import pytz as pytz
+from django.conf import settings
 from django.db import models
 from django.utils.timezone import now
 
@@ -11,7 +12,7 @@ from src.customers.models import Customer
 
 
 def path_and_rename(instance, filename):
-    upload_to = "covers"
+    upload_to = f"{settings.DJANGO_ENV}-covers"
     ext = filename.split(".")[-1]
     # get filename
     if instance.pk:
