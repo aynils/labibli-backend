@@ -56,3 +56,15 @@ AWS_S3_ENDPOINT_URL = f"https://{AWS_S3_REGION_NAME}.digitaloceanspaces.com"
 AWS_ACCESS_KEY_ID = "BGLZPAXQMT7H2HGFREQI"
 AWS_SECRET_ACCESS_KEY = env("DIGITAL_OCEAN_SECRET_ACCESS_KEY")
 AWS_STORAGE_BUCKET_NAME = "labibli-s3"
+
+
+# Auth email config
+EMAIL_FROM = "contact@labibli.com"
+EMAIL_BCC = "seraphin@aynils.ca"
+
+EMAIL_HOST = "smtp.postmarkapp.com"
+EMAIL_PORT = "587"
+EMAIL_HOST_USER = env("POSTMARK_API_KEY")
+EMAIL_HOST_PASSWORD = env("POSTMARK_API_KEY")
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False

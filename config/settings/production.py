@@ -85,7 +85,7 @@ POSTMARK = {
 
 
 # Auth email config
-EMAIL_FROM = "seraphin@aynils.ca"
+EMAIL_FROM = "contact@labibli.com"
 EMAIL_BCC = "seraphin@aynils.ca"
 
 EMAIL_HOST = "smtp.postmarkapp.com"
