@@ -14,6 +14,11 @@ ALLOWED_HOSTS = [
     "api.labibli.com",
 ]
 
+CORS_ALLOWED_ORIGINS = [
+    "https://app.labibli.com",
+    "https://labibli-frontend-production-xw59y.ondigitalocean.app",
+]
+
 if (
     len(sys.argv) > 0 and sys.argv[1] != "collectstatic"
 ):  # do not set cache and DB for static collection job
