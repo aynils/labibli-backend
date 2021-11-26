@@ -74,5 +74,5 @@ services:
     name: labibli-backend-production
     routes:
       - path: /
-    run_command: gunicorn --workers 3 --timeout 60 --worker-tmp-dir /dev/shm config.wsgi
+    run_command: gunicorn --workers 3 --timeout 1200 --worker-tmp-dir /dev/shm config.wsgi
     source_dir: /
