@@ -285,7 +285,7 @@ def import_books() -> dict:
                         title=item._data.get("title") or None,
                         organization=organization,
                         archived=item._data.get("archived") or False,
-                        deleted=item._data.get("archived") or False,
+                        deleted=item._data.get("deleted") or False,
                         featured=item._data.get("featured") or False,
                         status=item._data.get("status"),
                         author=item._data.get("author"),
