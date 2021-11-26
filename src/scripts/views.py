@@ -17,10 +17,10 @@ from src.customers.models import Customer
 from src.items.models import Book, Category, Collection, Lending
 
 DEFAULT_PICTURE_PLACEHOLDER = (
-    "https://sfo3.digitaloceanspaces.com/labibli-s3/pictures/"
-    "4916.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=BGLZPAXQMT7H2HGFREQI%2F20211107%2Fsfo3%2Fs3%2"
-    "Faws4_request&X-Amz-Date=20211107T214553Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host"
-    "&X-Amz-Signature=630b9a090fbd47165367a45bc2d19ca50b27af1349abb1995af89980da5863c4"
+    "https://firebasestorage.googleapis.com/v0/b/biblio-44466.appspot.com/o/aW1hZ2UucG5nV2VkIEFwciAyOCAyMDIxIDE0Oj"
+    "I5OjU1IEdNVC0wMzAwIChoZXVyZSBhdmFuY8OpZSBkZSBs4oCZQXRsYW50aXF1ZSk%3D"
+    "?alt=media"
+    "&token=a7be9af5-3072-4040-a0d8-2870d0cc3d9e"
 )
 
 home = str(Path.home())
@@ -226,6 +226,11 @@ def import_books() -> dict:
             ):  # reject old books not linked to a collection or to a deprecated cone
                 organization_id = organization_link[item._data.get("collectionId")]
                 organization = Organization.objects.get(id=organization_id)
+                if item._data.get("deleted") == "True":
+                    print(
+                        f"Deleted book will not be imported {item._data.get('title') or item._data.get('isbn')}"
+                    )
+                    continue
                 try:
                     if item._data.get("isbn"):
                         book = Book.objects.get(
