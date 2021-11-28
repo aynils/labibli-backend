@@ -20,6 +20,7 @@ class BookSerializer(serializers.ModelSerializer):
     categories = serializers.ListSerializer(
         child=CategorySerializer(), read_only=False, required=False
     )
+
     isbn = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     def to_representation(self, instance):
@@ -31,6 +32,12 @@ class BookSerializer(serializers.ModelSerializer):
         categories = validated_data.pop("categories", [])
         categories_ids = [category.get("id") for category in categories]
         instance.categories.set(Category.objects.filter(id__in=categories_ids))
+        instance.collections.set(
+            Collection.objects.filter(
+                organization=self.context.get("request").user.employee_of_organization
+            )
+        )
+        del validated_data["collections"]
 
         return super(BookSerializer, self).update(instance, validated_data)
 
