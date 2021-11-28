@@ -80,7 +80,7 @@ def get_wikipedia_book_information(isbn: str) -> dict or None:
         volume = response.json()[0]
         if volume:
             authors = [
-                f"{author[0]} {author[1]}" for author in volume.get("authors", [])
+                f"{author[0]} {author[1]}" for author in volume.get("author", [])
             ]
             publishers = [publisher.name for publisher in volume.get("publishers", [])]
             # cover_id = volume.get('covers', [])[0]
