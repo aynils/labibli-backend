@@ -43,6 +43,7 @@ class BookSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         categories = validated_data.pop("categories", [])
+        del validated_data["collections"]
         categories_ids = [category.get("id") for category in categories]
         instance = Book.objects.create(**validated_data)
         instance.categories.set(Category.objects.filter(id__in=categories_ids))
