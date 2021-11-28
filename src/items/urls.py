@@ -18,6 +18,11 @@ urlpatterns = [
         views.CategoryDetail.as_view(),
         name="get_put_patch_delete_category",
     ),
+    path(
+        r"categories/collection/<str:slug>/",
+        views.CategoriesShared.as_view(),
+        name="get_categories_shared",
+    ),
     # Collections
     path(
         r"collections/", views.CollectionsList.as_view(), name="list_post_collections"

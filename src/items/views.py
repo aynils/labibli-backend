@@ -160,6 +160,19 @@ class CategoriesList(generics.ListCreateAPIView):
         serializer.save(organization=user.employee_of_organization)
 
 
+class CategoriesShared(generics.ListCreateAPIView):
+    permission_classes = [
+        permissions.AllowAny,
+    ]
+    serializer_class = CategorySerializer
+
+    def get_queryset(self):
+        slug = self.kwargs["slug"]
+        collection = Collection.objects.get(slug=slug)
+        organization = collection.organization
+        return Category.objects.filter(organization=organization)
+
+
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def book_lookup(request):

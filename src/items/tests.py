@@ -404,6 +404,7 @@ class CategoryTests(APITestCase):
         cls.books = []
 
         cls.category = create_category(organization=cls.organization)
+        cls.collection = create_collection(cls.organization, slug="collection-slug")
 
     def setUp(self):
         pass
@@ -482,6 +483,19 @@ class CategoryTests(APITestCase):
         url = reverse("list_post_category")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_get_categories_shared(self):
+        """
+        Ensure unauthenticated user can get collection's categories
+        """
+        url = reverse("get_categories_shared", kwargs={"slug": "collection-slug"})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data.__len__(),
+            1,
+        )
+        self.assertEqual(response.data[0].get("name"), "Catégorie de test")
 
 
 class FindBookTests(APITestCase):
