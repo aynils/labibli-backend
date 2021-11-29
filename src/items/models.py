@@ -33,6 +33,9 @@ class Category(models.Model):
         ["name", "organization"],
     ]
 
+    class Meta:
+        ordering = ["name"]
+
 
 class Collection(models.Model):
     organization = models.ForeignKey(to=Organization, on_delete=models.CASCADE)
@@ -54,13 +57,6 @@ class Book(models.Model):
     archived = models.BooleanField(default=False)
     deleted = models.BooleanField(default=False)
     featured = models.BooleanField(default=False)
-    # status = models.CharField(
-    #     max_length=255,
-    #     blank=False,
-    #     null=False,
-    #     choices=Status.choices,
-    #     default=Status.AVAILABLE,
-    # )
     author = models.CharField(max_length=255, unique=False, blank=False, null=False)
     title = models.CharField(max_length=255, unique=False, blank=False, null=False)
     isbn = models.CharField(max_length=255, unique=False, blank=True, null=True)
@@ -87,6 +83,7 @@ class Book(models.Model):
         unique_together = [
             ["isbn", "organization", "title"],
         ]
+        ordering = ["-created_at"]
 
 
 class Lending(models.Model):
