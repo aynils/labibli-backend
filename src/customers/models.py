@@ -21,3 +21,4 @@ class Customer(models.Model):
             ["organization", "first_name", "last_name", "email"],
             ["organization", "first_name", "last_name", "phone"],
         ]
+        ordering = ["first_name"]
