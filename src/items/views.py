@@ -129,7 +129,7 @@ class LendingsList(generics.ListCreateAPIView):
         serializer.save(organization=user.employee_of_organization)
 
 
-class CategoryDetail(generics.RetrieveAPIView):
+class CategoryDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [
         permissions.IsAuthenticated,
         custom_permissions.IsEmployeeOfOrganization,
