@@ -153,7 +153,9 @@ class CategoriesList(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return Category.objects.filter(organization=user.employee_of_organization)
+        return Category.objects.filter(
+            organization=user.employee_of_organization
+        ).order_by("name")
 
     def perform_create(self, serializer):
         user = self.request.user
