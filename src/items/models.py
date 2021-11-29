@@ -83,7 +83,7 @@ class Book(models.Model):
         unique_together = [
             ["isbn", "organization", "title"],
         ]
-        ordering = ["-created_at"]
+        ordering = ["title"]
 
 
 class Lending(models.Model):
