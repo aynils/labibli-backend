@@ -67,6 +67,7 @@ class BookSerializer(serializers.ModelSerializer):
             "isbn",
             "publisher",
             "picture",
+            "inventory",
             "lang",
             "published_year",
             "description",
