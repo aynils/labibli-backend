@@ -163,6 +163,12 @@ class BookTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json().get("title"), "New Title")
 
+    def test_delete_book(self):
+        authenticate_user(self)
+        url = reverse("get_put_patch_delete_book", kwargs={"pk": 1})
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
 
 class CollectionTests(APITestCase):
     @classmethod
