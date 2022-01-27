@@ -9,15 +9,13 @@ from .base import env
 
 DEBUG = False
 DJANGO_ENV = "PRODUCTION"
+FRONTEND_URL = "https://app.labibli.com"
 
 ALLOWED_HOSTS = [
     "api.labibli.com",
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "https://app.labibli.com",
-    "https://labibli-frontend-production-xw59y.ondigitalocean.app",
-]
+CORS_ALLOWED_ORIGINS = [FRONTEND_URL]
 
 if (
     len(sys.argv) > 0 and sys.argv[1] != "collectstatic"

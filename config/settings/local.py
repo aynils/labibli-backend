@@ -8,6 +8,13 @@ DEBUG = True
 DJANGO_ENV = "DEV"
 
 ALLOWED_HOSTS = ["localhost"]
+FRONTEND_URL = "http://localhost:3000/"
+
+# CORS_ALLOWED_ORIGINS = [
+#     FRONTEND_URL,
+#     '*'
+# ]
+
 
 DATABASES = {
     "default": dj_database_url.parse(env("DATABASE_URL")),

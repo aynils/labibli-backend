@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/accounts/", include("src.accounts.urls")),
     path("api/items/", include("src.items.urls")),
     path("api/customers/", include("src.customers.urls")),
+    path("api/payment/", include("src.payment.urls")),
     path("scripts/", include("src.scripts.urls")),
     # path('api-auth/', include('rest_framework.urls')), # for web browsable API
 ]
