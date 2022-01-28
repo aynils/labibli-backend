@@ -21,4 +21,11 @@ class Organization(models.Model):
 
     @property
     def is_subscribed(self):
-        return False
+        from src.payment.models import Subscription
+
+        try:
+            subscription = Subscription.objects.get(organization=self)
+        except Subscription.DoesNotExist:
+            return False
+        else:
+            return subscription.active
