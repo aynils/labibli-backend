@@ -37,7 +37,8 @@ class BookSerializer(serializers.ModelSerializer):
                 organization=self.context.get("request").user.employee_of_organization
             )
         )
-        del validated_data["collections"]
+        if validated_data.get("collections"):
+            del validated_data["collections"]
 
         return super(BookSerializer, self).update(instance, validated_data)
 

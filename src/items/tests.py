@@ -123,7 +123,7 @@ class BookTests(APITestCase):
 
     def test_get_book(self):
         authenticate_user(self)
-        url = reverse("get_put_patch_delete_book", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_book", kwargs={"pk": self.books[0].id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json().get("title"), books_seed[0].get("title"))
@@ -133,7 +133,7 @@ class BookTests(APITestCase):
         Ensure an user cannot get a book from another organization
         """
         authenticate_admin(self)
-        url = reverse("get_put_patch_delete_book", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_book", kwargs={"pk": self.books[0].id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -157,7 +157,7 @@ class BookTests(APITestCase):
 
     def test_update_book(self):
         authenticate_user(self)
-        url = reverse("get_put_patch_delete_book", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_book", kwargs={"pk": self.books[0].id})
         data = {"title": "New Title"}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -165,7 +165,7 @@ class BookTests(APITestCase):
 
     def test_delete_book(self):
         authenticate_user(self)
-        url = reverse("get_put_patch_delete_book", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_book", kwargs={"pk": self.books[0].id})
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
@@ -196,7 +196,9 @@ class CollectionTests(APITestCase):
         Ensure collections are not public
         """
         authenticate_user(self)
-        url = reverse("get_put_patch_delete_collection", kwargs={"pk": 1})
+        url = reverse(
+            "get_put_patch_delete_collection", kwargs={"pk": self.collection.id}
+        )
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
@@ -220,7 +222,9 @@ class CollectionTests(APITestCase):
         Ensure collections can be updated by an user of the organization the collection belongs to
         """
         authenticate_user(self)
-        url = reverse("get_put_patch_delete_collection", kwargs={"pk": 1})
+        url = reverse(
+            "get_put_patch_delete_collection", kwargs={"pk": self.collection.id}
+        )
         data = {"name": "New collection name"}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -229,7 +233,9 @@ class CollectionTests(APITestCase):
         """
         Ensure collections can only be updated by authenticated user
         """
-        url = reverse("get_put_patch_delete_collection", kwargs={"pk": 1})
+        url = reverse(
+            "get_put_patch_delete_collection", kwargs={"pk": self.collection.id}
+        )
         data = {"name": "New collection name"}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -239,7 +245,9 @@ class CollectionTests(APITestCase):
         Ensure collections can only be updated by an user of the organization the collection belongs to
         """
         authenticate_admin(self)
-        url = reverse("get_put_patch_delete_collection", kwargs={"pk": 1})
+        url = reverse(
+            "get_put_patch_delete_collection", kwargs={"pk": self.collection.id}
+        )
         data = {"name": "New collection name"}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -306,7 +314,7 @@ class LendingTests(APITestCase):
         """
         Ensure lendings are not public
         """
-        url = reverse("get_put_patch_delete_lending", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_lending", kwargs={"pk": self.lending.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -315,7 +323,7 @@ class LendingTests(APITestCase):
         Ensure lendings are not public
         """
         authenticate_user(self)
-        url = reverse("get_put_patch_delete_lending", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_lending", kwargs={"pk": self.lending.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -324,7 +332,7 @@ class LendingTests(APITestCase):
         Ensure lendings can be updated by an user of the organization the lendings belongs to
         """
         authenticate_user(self)
-        url = reverse("get_put_patch_delete_lending", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_lending", kwargs={"pk": self.lending.id})
         data = {"name": "New collection name"}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -333,7 +341,7 @@ class LendingTests(APITestCase):
         """
         Ensure collections can only be updated by authenticated user
         """
-        url = reverse("get_put_patch_delete_lending", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_lending", kwargs={"pk": self.lending.id})
         data = {"name": "New collection name"}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -343,7 +351,7 @@ class LendingTests(APITestCase):
         Ensure collections can only be updated by an user of the organization the collection belongs to
         """
         authenticate_admin(self)
-        url = reverse("get_put_patch_delete_lending", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_lending", kwargs={"pk": self.lending.id})
         data = {"name": "New collection name"}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -420,7 +428,7 @@ class CategoryTests(APITestCase):
         Ensure categories are only accessible in the context of an org
         """
         authenticate_user(self)
-        url = reverse("get_put_patch_delete_category", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_category", kwargs={"pk": self.category.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -428,7 +436,7 @@ class CategoryTests(APITestCase):
         """
         Ensure categories are not public
         """
-        url = reverse("get_put_patch_delete_category", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_category", kwargs={"pk": self.category.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -457,16 +465,16 @@ class CategoryTests(APITestCase):
         Ensure categories can be updated by an user of the organization the collection belongs to
         """
         authenticate_user(self)
-        url = reverse("get_put_patch_delete_category", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_category", kwargs={"pk": self.category.id})
         data = {"name": "New category name"}
         response = self.client.patch(url, data)
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_update_category_anonymous(self):
         """
         Ensure categories can only be updated by authenticated user
         """
-        url = reverse("get_put_patch_delete_category", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_category", kwargs={"pk": self.category.id})
         data = {"name": "New category name"}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -476,10 +484,10 @@ class CategoryTests(APITestCase):
         Ensure categories can only be updated by an user of the organization the collection belongs to
         """
         authenticate_admin(self)
-        url = reverse("get_put_patch_delete_category", kwargs={"pk": 1})
+        url = reverse("get_put_patch_delete_category", kwargs={"pk": self.category.id})
         data = {"name": "New category name"}
         response = self.client.patch(url, data)
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_get_categories(self):
         """

@@ -8,6 +8,10 @@ class Subscription(models.Model):
     organization = models.ForeignKey(to=Organization, on_delete=models.CASCADE)
     plan = models.CharField(max_length=255, unique=False, blank=False, null=False)
     interval = models.CharField(max_length=255, unique=False, blank=False, null=False)
+    stripe_customer_id = models.CharField(
+        max_length=255, unique=False, blank=False, null=False
+    )
     active = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=django.utils.timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
     raw_data = models.JSONField(blank=False, null=False)
