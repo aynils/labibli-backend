@@ -45,7 +45,7 @@ def capture_payment_status(request):
             logger.info(f"{event.type} received and saved")
 
         except Exception as e:
-            logger.error(f"Error while treating {event.type}")
+            logger.error(f"Error while creating subscription for {event.type} - {e}")
             return Response(status=500, data={"error": e}, exception=True)
 
     elif event.type in [
@@ -57,7 +57,7 @@ def capture_payment_status(request):
             logger.info(f"{event.type} received and saved")
 
         except Exception as e:
-            logger.error(f"Error while treating {event.type}")
+            logger.error(f"Error while updating subscription for {event.type} - {e}")
             return Response(status=500, data={"error": e}, exception=True)
     else:
         logger.error(f"Unhandled event type {event.data}")
