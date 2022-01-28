@@ -8,7 +8,7 @@ DEBUG = True
 DJANGO_ENV = "DEV"
 
 ALLOWED_HOSTS = ["localhost", "432f-134-41-73-182.ngrok.io"]
-FRONTEND_URL = "http://localhost:3000/"
+FRONTEND_URL = "http://localhost:3000"
 
 # CORS_ALLOWED_ORIGINS = [
 #     FRONTEND_URL,
