@@ -158,7 +158,7 @@ class BookTests(APITestCase):
     def test_update_book(self):
         authenticate_user(self)
         url = reverse("get_put_patch_delete_book", kwargs={"pk": self.books[0].id})
-        data = {"title": "New Title"}
+        data = {"title": "New Title", "collections": []}
         response = self.client.patch(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json().get("title"), "New Title")

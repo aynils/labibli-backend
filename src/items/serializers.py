@@ -37,8 +37,7 @@ class BookSerializer(serializers.ModelSerializer):
                 organization=self.context.get("request").user.employee_of_organization
             )
         )
-        if validated_data.get("collections"):
-            del validated_data["collections"]
+        validated_data.pop("collections", [])
 
         return super(BookSerializer, self).update(instance, validated_data)
 
@@ -48,6 +47,8 @@ class BookSerializer(serializers.ModelSerializer):
         categories_ids = [category.get("id") for category in categories]
         instance = Book.objects.create(**validated_data)
         instance.categories.set(Category.objects.filter(id__in=categories_ids))
+
+        # For now, we always set the org ID as collection ID as there is only one collection per org
         instance.collections.set(
             Collection.objects.filter(
                 organization=self.context.get("request").user.employee_of_organization
