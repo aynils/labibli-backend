@@ -61,6 +61,7 @@ def create_subscription(organization, active: bool):
         active=active,
         interval="yearly",
         raw_data={},
+        stripe_customer_id="dummy-id",
     )
     subscription.save()
     return subscription

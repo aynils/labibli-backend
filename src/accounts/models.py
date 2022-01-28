@@ -1,5 +1,6 @@
 from authemail.models import EmailAbstractUser, EmailUserManager
 from django.db import models
+from django.dispatch import receiver
 from django.utils.timezone import now
 
 
@@ -29,3 +30,13 @@ class Organization(models.Model):
             return False
         else:
             return subscription.active
+
+
+@receiver(models.signals.post_save, sender=User)
+def create_organization(sender, instance, created, **kwargs):
+    if created:
+        name = f"{instance.email} - default organization"
+        organization = Organization.objects.create(name=name, owner=instance)
+        instance.employee_of_organization = organization
+        instance.save()
+        return organization

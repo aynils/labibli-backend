@@ -22,9 +22,9 @@ class SubscriptionTests(APITestCase):
         cls.organization = create_organization(owner=cls.user)
         cls.admin_organization = create_organization(owner=cls.admin_user)
         cls.subscription = create_subscription(
-            organization=cls.organization, active=True
+            organization=cls.organization,
+            active=True,
         )
-        create_subscription(organization=cls.admin_organization, active=False)
 
     def setUp(self):
         pass

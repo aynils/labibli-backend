@@ -7,7 +7,6 @@ from src.helpers.tests import (
     authenticate_admin,
     authenticate_user,
     create_admin_user,
-    create_organization,
     create_user,
 )
 
@@ -17,23 +16,13 @@ class OrganizationTests(APITestCase):
     def setUpTestData(cls):
         cls.user = create_user()
         cls.admin_user = create_admin_user()
-        cls.organization = create_organization(owner=cls.user)
 
     def setUp(self):
         pass
 
-    def test_create_organization(self):
-        """
-        Ensure we can create a new organization object.
-        """
-        authenticate_user(self)
-        url = reverse("post_organizations")
-        data = {"name": "Test Organization"}
-        response = self.client.post(url, data)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        new_organization = Organization.objects.get(id=2)
-        self.assertEqual(new_organization.name, "Test Organization")
-        self.assertEqual(new_organization.owner, self.user)
+    def test_auto_create_organization(self):
+        organization = Organization.objects.get(owner=self.user)
+        self.assertEqual(organization.name, f"{self.user.email} - default organization")
 
     def test_get_organizations(self):
         authenticate_admin(self)
@@ -43,10 +32,11 @@ class OrganizationTests(APITestCase):
 
     def test_get_current_organizations(self):
         authenticate_user(self)
+        organization = Organization.objects.get(owner=self.user)
         url = reverse("get_current_organization")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data.get("name"), self.organization.name)
+        self.assertEqual(response.data.get("name"), organization.name)
 
     def test_get_other_organizations(self):
         """
