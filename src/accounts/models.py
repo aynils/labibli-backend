@@ -21,4 +21,4 @@ class Organization(models.Model):
 
     @property
     def is_subscribed(self):
-        return True
+        return False

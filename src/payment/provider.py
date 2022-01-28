@@ -17,7 +17,7 @@ class PaymentEvent:
     error: str = ""
 
 
-def create_session(price_id: str, organization_id: int):
+def create_session(price_id: str, organization_id: int, user_email: str):
     return stripe.checkout.Session.create(
         line_items=[
             {
@@ -29,7 +29,9 @@ def create_session(price_id: str, organization_id: int):
         success_url=f"{settings.FRONTEND_URL}/account/success",
         cancel_url=f"{settings.FRONTEND_URL}/account/error",
         client_reference_id=organization_id,
+        customer_email=user_email,
         allow_promotion_codes=True,
+        automatic_tax={"enabled": True},
     )
 
 

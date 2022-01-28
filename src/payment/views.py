@@ -1,6 +1,6 @@
 import logging
+import time
 
-from django.shortcuts import redirect
 from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -14,18 +14,19 @@ logger = logging.getLogger(__name__)
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def create_checkout_session(request):
-    price_id = request.POST.get("price_id")
+    price_id = request.data.get("priceId")
     organization_id = request.user.employee_of_organization.id
+    user_email = request.user.email
     try:
         checkout_session = create_session(
-            price_id=price_id, organization_id=organization_id
+            price_id=price_id, organization_id=organization_id, user_email=user_email
         )
 
     except Exception as e:
         logger.error(f"Create checkout failed: {e}")
         return Response(status=500, data={"error": e}, exception=True)
 
-    return redirect(checkout_session.url)
+    return Response(status=200, data={"url": checkout_session.url})
 
 
 @api_view(["POST"])
@@ -38,11 +39,21 @@ def capture_payment_status(request):
 
     if event.type in [
         "checkout.session.completed",
+    ]:
+        try:
+            create_subscription(checkout_data=event.data)
+            logger.info(f"{event.type} received and saved")
+
+        except Exception as e:
+            logger.error(f"Error while treating {event.type}")
+            return Response(status=500, data={"error": e}, exception=True)
+
+    elif event.type in [
         "invoice.paid",
         "invoice.payment_failed",
     ]:
         try:
-            create_or_update_subscription(subscription_data=event.data)
+            update_subscription(invoice_data=event.data)
             logger.info(f"{event.type} received and saved")
 
         except Exception as e:
@@ -54,18 +65,38 @@ def capture_payment_status(request):
     return Response(status=204)
 
 
-def create_or_update_subscription(subscription_data: dict):
-    organization_id = subscription_data.get("client_reference_id")
-    stripe_customer_id = subscription_data.get("customer")
-    active = subscription_data.get("status") == "paid"
-    items = subscription_data.get("items")
-    plan = items.get("data").get("plan").get("id")
-    interval = items.get("data").get("plan").get("interval")
+def create_subscription(checkout_data: dict):
+    organization_id = checkout_data.get("client_reference_id")
+    stripe_customer_id = checkout_data.get("customer")
     Subscription.objects.create(
         organization_id=organization_id,
-        plan=plan,
-        interval=interval,
-        active=active,
         stripe_customer_id=stripe_customer_id,
-        raw_data=subscription_data,
+        raw_data=checkout_data,
     )
+
+
+def update_subscription(invoice_data: dict):
+    stripe_customer_id = invoice_data.get("customer")
+    active = invoice_data.get("status") == "paid"
+    lines = invoice_data.get("lines")
+    plan = lines.get("data")[0].get("plan").get("id")
+    interval = lines.get("data")[0].get("plan").get("interval")
+
+    subscription = False
+    retry = 0
+    while not subscription and retry < 30:
+        try:
+            subscription = Subscription.objects.get(
+                stripe_customer_id=stripe_customer_id
+            )
+        except Subscription.DoesNotExist:
+            retry += 1
+            time.sleep(1)
+
+    subscription.plan = plan
+    subscription.interval = interval
+    subscription.active = active
+    subscription.plan = plan
+    subscription.raw_data = invoice_data
+
+    subscription.save()

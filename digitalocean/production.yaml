@@ -21,14 +21,22 @@ envs:
     scope: RUN_AND_BUILD_TIME
     type: SECRET
     value: EV[1:U/ptmdtv7sG4RL4nVrF7mIuTaLwIFPe7:QAQwaiJPtVxqwZmuocxMItfBKdvbbJvkQn2b1erOndAtoz3QWEMD/K9icAerVchIQRkW0o8QMZ9Qityv/P3lrqhb2GhwRSbuiHW6Ht+Ki6nXLdym0b/5dsMlpWYXmamwRQRj27Qa5hwgZ+iTA1WvowJ6gQ==]
-  - key: DIGITAL_OCEAN_SECRET_ACCESS_KEY
-    scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: EV[1:tuSKXuF3O/zGqHEOS8oeY24oUiqUjrcg:vbsL1nof+glAUTeMYZa+LHzVUPzl3ZKZw8jjfBwQBx1V1R3ZK/O7V4/Pd/Zp3yA=]
   - key: POSTMARK_API_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
     value: EV[1:WDGMDFUY2/9/YPW+BUvsZ7zO9EIeM7e3:8nQMaI2evymWJgVjSZevPIrBMF5NmehPAgMzx7eTSYCztTLe5IKxOz526ETwKuqcZVm9yQ==]
+  - key: DIGITAL_OCEAN_SECRET_ACCESS_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:OsE3d7ffB/ew6FJ0rBri0+TD+QxiYJKf:EJOt5icHuCx8huSb3Acz6rWslKBx7yLqXqLp+vApOYriphYMMwxMnmEXLWwCnAjwJBs7tF5muDWcd3E=]
+  - key: STRIPE_PRIVATE_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:ijtfGaj7p6HqmwzkqEPe1vuN9t7qLzRj:etVs9NE5IcOS8yQIgNi1gRojOb0/Tgu+L5/JUAYWi8viJfRu/lOZ5e9hsHVEjG8n8eCp0yi+F51o8P+7T/JkLU1X9Zih4iQhpiMF8fbpMm8y3rx9n0EjRb/qJNJz1mK6a+cJd8OHJhsH5wJp6W9/6Xhr/TGjLb5uHz+6]
+  - key: STRIPE_WEBHOOK_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:ePCi/NSonCQkZ0WicNgLSgMC/4o1vhA+:SpLYIG6JXg1CEfvo6KoBlU6MkRS4+4nrBDA/MucogCdYlfO/dFWQtX0JHeYdS4NR/vJP8dfx]
 jobs:
   - envs:
       - key: DISABLE_COLLECTSTATIC

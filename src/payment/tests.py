@@ -56,7 +56,9 @@ class PaymentProviderTests(APITestCase):
     def test_create_checkout_session(self):
         authenticate_user(self)
         url = reverse("post_create_checkout_session")
-        data = {"price_id": PRICE_ID_MONTHLY}
+        data = {"priceId": PRICE_ID_MONTHLY}
         response = self.client.post(url, data)
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url[:32], "https://checkout.stripe.com/pay/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data.get("url")[:32], "https://checkout.stripe.com/pay/"
+        )
