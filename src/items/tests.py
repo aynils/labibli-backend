@@ -14,7 +14,7 @@ from src.helpers.tests import (
     create_user,
     generate_photo_file,
 )
-from src.items.models import Book
+from src.items.models import Book, Collection
 
 books_seed = [
     {
@@ -179,8 +179,9 @@ class CollectionTests(APITestCase):
         cls.admin_organization = create_organization(owner=cls.admin_user)
         cls.books = []
 
-        cls.collection = create_collection(cls.organization, slug="collection-slug")
-        create_collection(cls.admin_organization, slug="admin-collection-slug")
+        cls.collection = create_collection(
+            cls.admin_organization, slug="admin-collection-slug"
+        )
 
         for book in books_seed:
             new_book = Book.objects.create(**book, organization=cls.organization)
@@ -191,11 +192,17 @@ class CollectionTests(APITestCase):
     def setUp(self):
         pass
 
+    def test_auto_create_collection(self):
+        collection = Collection.objects.get(organization=self.organization)
+        self.assertEqual(
+            collection.name, f"{self.organization.name} - default collection"
+        )
+
     def test_get_collection(self):
         """
-        Ensure collections are not public
+        Ensure user can get its own collection
         """
-        authenticate_user(self)
+        authenticate_admin(self)
         url = reverse(
             "get_put_patch_delete_collection", kwargs={"pk": self.collection.id}
         )
@@ -215,13 +222,16 @@ class CollectionTests(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data.__len__(), 1)
-        self.assertEqual(response.data[0].get("name"), self.collection.name)
+        self.assertEqual(
+            response.data[0].get("name"),
+            f"{self.organization.name} - default collection",
+        )
 
     def test_update_collection(self):
         """
-        Ensure collections can be updated by an user of the organization the collection belongs to
+        Ensure collections can be updated by a user of the organization the collection belongs to
         """
-        authenticate_user(self)
+        authenticate_admin(self)
         url = reverse(
             "get_put_patch_delete_collection", kwargs={"pk": self.collection.id}
         )
@@ -244,7 +254,7 @@ class CollectionTests(APITestCase):
         """
         Ensure collections can only be updated by an user of the organization the collection belongs to
         """
-        authenticate_admin(self)
+        authenticate_user(self)
         url = reverse(
             "get_put_patch_delete_collection", kwargs={"pk": self.collection.id}
         )
@@ -254,7 +264,7 @@ class CollectionTests(APITestCase):
 
     def test_post_collection(self):
         """
-        Ensure collections can be created by an user of the organization the collection belongs to
+        Ensure collections can be created by a user of the organization the collection belongs to
         """
         authenticate_user(self)
         url = reverse("list_post_collections")
@@ -276,10 +286,10 @@ class CollectionTests(APITestCase):
         """
         Ensure collections are public
         """
-        url = reverse("get_collection_shared", kwargs={"slug": "collection-slug"})
+        url = reverse("get_collection_shared", kwargs={"slug": "admin-collection-slug"})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data.get("slug"), "collection-slug")
+        self.assertEqual(response.data.get("slug"), "admin-collection-slug")
         self.assertEqual(
             response.data.get("books").__len__(),
             self.collection.book_set.all().__len__(),
