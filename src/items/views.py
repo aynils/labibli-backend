@@ -1,9 +1,12 @@
 import dataclasses
 import datetime
 
+from django.conf import settings
+from django.db.models import Q
 from django.http import HttpResponse
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -18,16 +21,39 @@ from src.items.serializers import (
 from src.labibli import permissions as custom_permissions
 
 
+class BooksListPagination(PageNumberPagination):
+    page_size = settings.DEFAULT_BOOK_PAGE_SIZE
+    page_size_query_param = "page_size"
+    max_page_size = 1000
+
+
 class BooksList(generics.ListCreateAPIView):
     permission_classes = [
         permissions.IsAuthenticated,
         custom_permissions.IsEmployeeOfAnOrganization,
     ]
     serializer_class = BookSerializer
+    pagination_class = BooksListPagination
 
     def get_queryset(self):
         user = self.request.user
-        return Book.objects.filter(organization=user.employee_of_organization)
+        query = self.request.query_params.get("query")
+        available = self.request.query_params.get("available")
+        category_id = self.request.query_params.get("categoryId")
+        queryset = Book.objects.filter(organization=user.employee_of_organization)
+        if query:
+            queryset = queryset.filter(
+                Q(title__contains=query)
+                | Q(author__contains=query)
+                | Q(isbn__contains=query)
+            )
+        if available and available.lower() in ["true", "1", "t", "y", "yes"]:
+            queryset = queryset.filter(
+                Q(lendings__isnull=True) | Q(lendings__returned_at__isnull=False)
+            )
+        if category_id:
+            queryset = queryset.filter(categories=category_id)
+        return queryset
 
     def perform_create(self, serializer):
         user = self.request.user

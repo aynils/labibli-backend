@@ -31,8 +31,8 @@ books_seed = [
     {
         "archived": False,
         "featured": False,
-        "author": "Marcel",
-        "title": "L'amour de la bière 2",
+        "author": "Jean Michel",
+        "title": "La bière, c'est mauvais",
         "isbn": "9234567890123",
         "publisher": "",
         "picture": "",
@@ -83,23 +83,195 @@ class BookTests(APITestCase):
         cls.books = []
         cls.picture = generate_photo_file()
 
-        for book in books_seed:
+        cls.collection = create_collection(
+            cls.admin_organization, slug="admin-collection-slug"
+        )
+
+        cls.category = create_category(organization=cls.organization)
+
+        for index, book in enumerate(books_seed):
             new_book = Book.objects.create(**book, organization=cls.organization)
+            new_book.collections.add(cls.collection)
+            if index == 0:
+                new_book.categories.add(cls.category)
+            new_book.save()
             cls.books.append(new_book)
+
+        cls.customer = create_customer(cls.organization)
+
+        cls.lending = create_lending(
+            cls.organization, book=cls.books[0], customer=cls.customer
+        )
 
     def setUp(self):
         pass
 
     def test_list_books(self):
         """
-        Ensure an user can list books from the organisation they're an employee of.
+        Ensure a user can list books from the organisation they're an employee of.
         """
         authenticate_user(self)
         url = reverse("list_post_books")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        books = response.json()
+        books = response.json().get("results")
         self.assertEqual(len(books), len(books_seed))
+        self.assertTrue(
+            all([book.get("organization") == self.organization.name for book in books])
+        )
+
+    def test_filter_books_title(self):
+        """
+        Ensure a user can filter books based on title
+        """
+        authenticate_user(self)
+        url = reverse("list_post_books") + f"?query={books_seed[0].get('title')}"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        books = response.json().get("results")
+        self.assertEqual(len(books), 1)
+        self.assertTrue(
+            all([book.get("organization") == self.organization.name for book in books])
+        )
+
+    def test_filter_books_title_not_found(self):
+        """
+        Ensure a user can filter books based on title
+        """
+        authenticate_user(self)
+        url = reverse("list_post_books") + f"?query={'i dont exist'}"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        books = response.json().get("results")
+        self.assertEqual(len(books), 0)
+        self.assertTrue(
+            all([book.get("organization") == self.organization.name for book in books])
+        )
+
+    def test_filter_books_isbn(self):
+        """
+        Ensure a user can filter books based on isbn
+        """
+        authenticate_user(self)
+        url = reverse("list_post_books") + f"?query={books_seed[0].get('isbn')}"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        books = response.json().get("results")
+        self.assertEqual(len(books), 1)
+        self.assertTrue(
+            all([book.get("organization") == self.organization.name for book in books])
+        )
+
+    def test_filter_books_author(self):
+        """
+        Ensure a user can filter books based on author
+        """
+        authenticate_user(self)
+        url = reverse("list_post_books") + f"?query={books_seed[0].get('author')}"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        books = response.json().get("results")
+        self.assertEqual(len(books), 1)
+        self.assertTrue(
+            all([book.get("organization") == self.organization.name for book in books])
+        )
+
+    def test_filter_books_category(self):
+        """
+        Ensure a user can filter books based on category
+        """
+        authenticate_user(self)
+        url = reverse("list_post_books") + f"?categoryId={self.category.id}"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        books = response.json().get("results")
+        self.assertEqual(len(books), 1)
+        self.assertTrue(
+            all([book.get("organization") == self.organization.name for book in books])
+        )
+
+    def test_filter_books_available(self):
+        """
+        Ensure a user can filter books based on availability
+        """
+        authenticate_user(self)
+        url = reverse("list_post_books") + "?available=true"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        books = response.json().get("results")
+        self.assertEqual(len(books), 1)
+        self.assertTrue(
+            all([book.get("organization") == self.organization.name for book in books])
+        )
+
+    def test_filter_books_category_and_title(self):
+        """
+        Ensure a user can filter books based on category and title
+        """
+        authenticate_user(self)
+        url = (
+            reverse("list_post_books")
+            + f"?query={books_seed[0].get('title')}"
+            + f"&categoryId={self.category.id}"
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        books = response.json().get("results")
+        self.assertEqual(len(books), 1)
+        self.assertTrue(
+            all([book.get("organization") == self.organization.name for book in books])
+        )
+
+    def test_filter_books_category_and_title_not_found(self):
+        """
+        Ensure a user can filter books based on category and title
+        """
+        authenticate_user(self)
+        url = (
+            reverse("list_post_books")
+            + f"?query={books_seed[1].get('title')}"
+            + f"&categoryId={self.category.id}"
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        books = response.json().get("results")
+        self.assertEqual(len(books), 0)
+        self.assertTrue(
+            all([book.get("organization") == self.organization.name for book in books])
+        )
+
+    def test_filter_books_available_and_title(self):
+        """
+        Ensure a user can filter books based on availability and title
+        """
+        authenticate_user(self)
+        url = (
+            reverse("list_post_books")
+            + f"?query={books_seed[1].get('title')}"
+            + "&available=true"
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        books = response.json().get("results")
+        self.assertEqual(len(books), 1)
+        self.assertTrue(
+            all([book.get("organization") == self.organization.name for book in books])
+        )
+
+    def test_filter_books_available_and_title_not_found(self):
+        """
+        Ensure a user can filter books based on availability and title
+        """
+        authenticate_user(self)
+        url = (
+            reverse("list_post_books")
+            + f"?query={books_seed[0].get('title')}"
+            + "&available=true"
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        books = response.json().get("results")
+        self.assertEqual(len(books), 0)
         self.assertTrue(
             all([book.get("organization") == self.organization.name for book in books])
         )
@@ -114,7 +286,7 @@ class BookTests(APITestCase):
         url = reverse("list_post_books")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        books = response.json()
+        books = response.json().get("results")
         self.assertEqual(len(books), len(books_seed))
         # Check that all books belongs to the user's organization
         self.assertTrue(
@@ -209,7 +381,7 @@ class CollectionTests(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            response.data.get("books").__len__(),
+            response.data.get("books").get("results").__len__(),
             self.collection.book_set.all().__len__(),
         )
 
@@ -291,7 +463,7 @@ class CollectionTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data.get("slug"), "admin-collection-slug")
         self.assertEqual(
-            response.data.get("books").__len__(),
+            response.data.get("books").get("results").__len__(),
             self.collection.book_set.all().__len__(),
         )
 

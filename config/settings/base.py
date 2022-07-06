@@ -137,6 +137,8 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.LimitOffsetPagination",
 }
 
+DEFAULT_BOOK_PAGE_SIZE = 50
+
 AUTH_EMAIL_VERIFICATION = False
 
 STRIPE_WEBHOOK_KEY = env("STRIPE_WEBHOOK_KEY")

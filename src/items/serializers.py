@@ -1,3 +1,6 @@
+from django.conf import settings
+from django.core.paginator import Paginator
+from django.urls import reverse
 from rest_framework import serializers
 
 from src.customers.serializers import CustomerSerializer
@@ -83,7 +86,38 @@ class BookSerializer(serializers.ModelSerializer):
 class CollectionSerializer(serializers.ModelSerializer):
     organization = serializers.ReadOnlyField(source="organization.name")
     organization_email = serializers.ReadOnlyField(source="organization.owner.email")
-    books = BookSerializer(source="book_set", many=True, read_only=True)
+    books = serializers.SerializerMethodField("paginated_books")
+
+    def paginated_books(self, obj):
+        page_size = (
+            self.context["request"].query_params.get("size")
+            or settings.DEFAULT_BOOK_PAGE_SIZE
+        )
+        paginator = Paginator(obj.book_set.all(), page_size)
+        page = int(self.context["request"].query_params.get("page") or 1)
+
+        books = paginator.page(page)
+        serializer = BookSerializer(books, many=True)
+
+        collection_url = self.context["request"].build_absolute_uri(
+            reverse("get_collection_shared", kwargs={"slug": obj.slug})
+        )
+        if page < paginator.num_pages:
+            next = collection_url + f"?page={page+1}"
+        else:
+            next = None
+
+        if page >= 1:
+            previous = None
+        else:
+            previous = collection_url + f"?page={page-1}"
+
+        return {
+            "count": paginator.count,
+            "results": serializer.data,
+            "previous": previous,
+            "next": next,
+        }
 
     class Meta:
         model = Collection

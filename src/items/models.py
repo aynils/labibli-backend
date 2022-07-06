@@ -46,12 +46,6 @@ class Collection(models.Model):
 
 
 class Book(models.Model):
-    class Status(models.TextChoices):
-        LOST = "lost", ("Lost")
-        RESERVED = "reserved", ("Reserved")
-        LENT = "borrowed", ("Prêté")
-        AVAILABLE = "available", ("disponible")
-
     organization = models.ForeignKey(to=Organization, on_delete=models.CASCADE)
     created_at = models.DateTimeField(default=now)
     archived = models.BooleanField(default=False)
@@ -89,7 +83,7 @@ class Book(models.Model):
 class Lending(models.Model):
     organization = models.ForeignKey(to=Organization, on_delete=models.CASCADE)
     customer = models.ForeignKey(to=Customer, on_delete=models.CASCADE)
-    book = models.ForeignKey(to=Book, on_delete=models.CASCADE)
+    book = models.ForeignKey(to=Book, on_delete=models.CASCADE, related_name="lendings")
     allowance_days = models.IntegerField(
         unique=False, blank=True, null=False, default=31
     )

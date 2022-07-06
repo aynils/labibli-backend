@@ -105,11 +105,11 @@ def create_lending(organization, customer, book):
 
 
 def create_category(organization):
-    collection = Category.objects.create(
+    category = Category.objects.create(
         organization=organization, name="Catégorie de test"
     )
-    collection.save()
-    return collection
+    category.save()
+    return category
 
 
 def generate_photo_file():
