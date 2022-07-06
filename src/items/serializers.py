@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.urls import reverse
 from rest_framework import serializers
 
@@ -89,11 +90,29 @@ class CollectionSerializer(serializers.ModelSerializer):
     books = serializers.SerializerMethodField("paginated_books")
 
     def paginated_books(self, obj):
+        query = self.context.get("request").query_params.get("query")
+        available = self.context.get("request").query_params.get("available")
+        category_id = self.context.get("request").query_params.get("categoryId")
+        queryset = obj.book_set
+        if query:
+            queryset = queryset.filter(
+                Q(title__contains=query)
+                | Q(author__contains=query)
+                | Q(isbn__contains=query)
+            )
+        if available and available.lower() in ["true", "1", "t", "y", "yes"]:
+            queryset = queryset.filter(
+                Q(lendings__isnull=True) | Q(lendings__returned_at__isnull=False)
+            )
+
+        if category_id:
+            queryset = queryset.filter(categories=category_id)
+
         page_size = (
             self.context["request"].query_params.get("size")
             or settings.DEFAULT_BOOK_PAGE_SIZE
         )
-        paginator = Paginator(obj.book_set.all(), page_size)
+        paginator = Paginator(queryset.all(), page_size)
         page = int(self.context["request"].query_params.get("page") or 1)
 
         books = paginator.page(page)

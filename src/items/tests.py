@@ -355,11 +355,21 @@ class CollectionTests(APITestCase):
             cls.admin_organization, slug="admin-collection-slug"
         )
 
-        for book in books_seed:
+        cls.category = create_category(organization=cls.organization)
+
+        for index, book in enumerate(books_seed):
             new_book = Book.objects.create(**book, organization=cls.organization)
             new_book.collections.add(cls.collection)
+            if index == 0:
+                new_book.categories.add(cls.category)
             new_book.save()
             cls.books.append(new_book)
+
+        cls.customer = create_customer(cls.organization)
+
+        cls.lending = create_lending(
+            cls.organization, book=cls.books[0], customer=cls.customer
+        )
 
     def setUp(self):
         pass
@@ -467,6 +477,54 @@ class CollectionTests(APITestCase):
             self.collection.book_set.all().__len__(),
         )
 
+    def test_get_collection_shared_filter_title(self):
+        """
+        Ensure collections can be filtered by title
+        """
+        url = (
+            reverse("get_collection_shared", kwargs={"slug": "admin-collection-slug"})
+            + f"?query={books_seed[0].get('title')}"
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data.get("slug"), "admin-collection-slug")
+        self.assertEqual(
+            response.data.get("books").get("results").__len__(),
+            1,
+        )
+
+    def test_get_collection_shared_filter_available(self):
+        """
+        Ensure collections can be filtered by availability
+        """
+        url = (
+            reverse("get_collection_shared", kwargs={"slug": "admin-collection-slug"})
+            + "?available=true"
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data.get("slug"), "admin-collection-slug")
+        self.assertEqual(
+            response.data.get("books").get("results").__len__(),
+            1,
+        )
+
+    def test_get_collection_shared_filter_category(self):
+        """
+        Ensure collections can be filtered by category
+        """
+        url = (
+            reverse("get_collection_shared", kwargs={"slug": "admin-collection-slug"})
+            + f"?categoryId={self.category.id}"
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data.get("slug"), "admin-collection-slug")
+        self.assertEqual(
+            response.data.get("books").get("results").__len__(),
+            1,
+        )
+
 
 class LendingTests(APITestCase):
     @classmethod
@@ -570,7 +628,7 @@ class LendingTests(APITestCase):
         Ensure lendings can be returned
         """
         authenticate_user(self)
-        url = reverse("return_lending", kwargs={"pk": 1})
+        url = reverse("return_lending", kwargs={"pk": self.lending.id})
         data = {}
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
