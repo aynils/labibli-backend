@@ -133,6 +133,7 @@ class CollectionSerializer(serializers.ModelSerializer):
 
         return {
             "count": paginator.count,
+            "num_pages": paginator.num_pages,
             "results": serializer.data,
             "previous": previous,
             "next": next,

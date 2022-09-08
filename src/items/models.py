@@ -78,6 +78,12 @@ class Book(models.Model):
             ["isbn", "organization", "title"],
         ]
         ordering = ["title"]
+        indexes = [
+            models.Index(fields=["author"]),
+            models.Index(fields=["title"]),
+            models.Index(fields=["isbn"]),
+            models.Index(fields=["organization_id", "author", "title", "isbn"]),
+        ]
 
 
 class Lending(models.Model):

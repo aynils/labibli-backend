@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+from collections import OrderedDict
 
 from django.conf import settings
 from django.db.models import Q
@@ -26,6 +27,19 @@ class BooksListPagination(PageNumberPagination):
     page_size_query_param = "page_size"
     max_page_size = 1000
 
+    def get_paginated_response(self, data):
+        return Response(
+            OrderedDict(
+                [
+                    ("count", self.page.paginator.count),
+                    ("next", self.get_next_link()),
+                    ("previous", self.get_previous_link()),
+                    ("results", data),
+                    ("num_pages", self.page.paginator.num_pages),
+                ]
+            )
+        )
+
 
 class BooksList(generics.ListCreateAPIView):
     permission_classes = [
@@ -39,20 +53,21 @@ class BooksList(generics.ListCreateAPIView):
         user = self.request.user
         query = self.request.query_params.get("query")
         available = self.request.query_params.get("available")
-        category_id = self.request.query_params.get("categoryId")
+        category_ids = self.request.query_params.getlist("categoryId")
         queryset = Book.objects.filter(organization=user.employee_of_organization)
         if query:
             queryset = queryset.filter(
-                Q(title__contains=query)
-                | Q(author__contains=query)
-                | Q(isbn__contains=query)
+                Q(title__unaccent__icontains=query)
+                | Q(author__unaccent__icontains=query)
+                | Q(isbn__unaccent__icontains=query)
             )
         if available and available.lower() in ["true", "1", "t", "y", "yes"]:
             queryset = queryset.filter(
                 Q(lendings__isnull=True) | Q(lendings__returned_at__isnull=False)
             )
-        if category_id:
-            queryset = queryset.filter(categories=category_id)
+        for category_id in category_ids:
+            queryset = queryset.filter(categories__in=category_id)
+            queryset = queryset.filter(categories__in=category_id)
         return queryset
 
     def perform_create(self, serializer):

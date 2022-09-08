@@ -27,6 +27,7 @@ DJANGO_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
 ]
 
 THIRD_PARTY_APPS = [
@@ -137,7 +138,8 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.LimitOffsetPagination",
 }
 
-DEFAULT_BOOK_PAGE_SIZE = 50
+# TODO: Set to 25
+DEFAULT_BOOK_PAGE_SIZE = 2
 
 AUTH_EMAIL_VERIFICATION = False
 

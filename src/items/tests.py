@@ -737,6 +737,7 @@ class CategoryTests(APITestCase):
         url = reverse("list_post_category")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data[0].get("name"), self.category.name)
 
     def test_get_categories_shared(self):
         """
