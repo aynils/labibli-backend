@@ -138,7 +138,6 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.LimitOffsetPagination",
 }
 
-# TODO: Set to 25
 DEFAULT_BOOK_PAGE_SIZE = 2
 
 AUTH_EMAIL_VERIFICATION = False

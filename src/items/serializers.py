@@ -92,7 +92,7 @@ class CollectionSerializer(serializers.ModelSerializer):
     def paginated_books(self, obj):
         query = self.context.get("request").query_params.get("query")
         available = self.context.get("request").query_params.get("available")
-        category_id = self.context.get("request").query_params.get("categoryId")
+        category_ids = self.context.get("request").query_params.getlist("categoryId")
         queryset = obj.book_set
         if query:
             queryset = queryset.filter(
@@ -105,8 +105,9 @@ class CollectionSerializer(serializers.ModelSerializer):
                 Q(lendings__isnull=True) | Q(lendings__returned_at__isnull=False)
             )
 
-        if category_id:
-            queryset = queryset.filter(categories=category_id)
+        for category_id in category_ids:
+            queryset = queryset.filter(categories__in=category_id)
+            queryset = queryset.filter(categories__in=category_id)
 
         page_size = (
             self.context["request"].query_params.get("size")
