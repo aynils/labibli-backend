@@ -60,5 +60,5 @@ class PaymentProviderTests(APITestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.data.get("url")[:32], "https://checkout.stripe.com/pay/"
+            response.data.get("url")[:34], "https://checkout.stripe.com/c/pay/"
         )
