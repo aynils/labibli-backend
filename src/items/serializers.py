@@ -106,7 +106,7 @@ class CollectionSerializer(serializers.ModelSerializer):
             )
 
         for category_id in category_ids:
-            queryset = queryset.filter(categories__in=category_id)
+            queryset = queryset.filter(categories__in=[category_id])
 
         page_size = (
             self.context["request"].query_params.get("size")
@@ -126,7 +126,7 @@ class CollectionSerializer(serializers.ModelSerializer):
         else:
             next = None
 
-        if page >= 1:
+        if page <= 1:
             previous = None
         else:
             previous = collection_url + f"?page={page-1}"

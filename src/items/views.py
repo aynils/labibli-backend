@@ -68,7 +68,7 @@ class BooksList(generics.ListCreateAPIView):
                 Q(lendings__isnull=True) | Q(lendings__returned_at__isnull=False)
             )
         for category_id in category_ids:
-            queryset = queryset.filter(categories__in=category_id)
+            queryset = queryset.filter(categories__in=[category_id])
         return queryset
 
     def perform_create(self, serializer):
