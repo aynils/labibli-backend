@@ -96,9 +96,9 @@ class CollectionSerializer(serializers.ModelSerializer):
         queryset = obj.book_set.order_by("-featured")
         if query:
             queryset = queryset.filter(
-                Q(title__contains=query)
-                | Q(author__contains=query)
-                | Q(isbn__contains=query)
+                Q(title__unaccent__icontains=query)
+                | Q(author__unaccent__icontains=query)
+                | Q(isbn__unaccent__icontains=query)
             )
         if available and available.lower() in ["true", "1", "t", "y", "yes"]:
             queryset = queryset.filter(
@@ -106,7 +106,6 @@ class CollectionSerializer(serializers.ModelSerializer):
             )
 
         for category_id in category_ids:
-            queryset = queryset.filter(categories__in=category_id)
             queryset = queryset.filter(categories__in=category_id)
 
         page_size = (
