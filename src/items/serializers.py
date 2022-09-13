@@ -93,7 +93,7 @@ class CollectionSerializer(serializers.ModelSerializer):
         query = self.context.get("request").query_params.get("query")
         available = self.context.get("request").query_params.get("available")
         category_ids = self.context.get("request").query_params.getlist("categoryId")
-        queryset = obj.book_set
+        queryset = obj.book_set.order_by("-featured")
         if query:
             queryset = queryset.filter(
                 Q(title__contains=query)
