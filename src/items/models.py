@@ -77,7 +77,7 @@ class Book(models.Model):
         unique_together = [
             ["isbn", "organization", "title"],
         ]
-        ordering = ["title"]
+        ordering = ["-created_at", "title"]
         indexes = [
             models.Index(fields=["author"]),
             models.Index(fields=["title"]),
