@@ -1,6 +1,8 @@
+import json
 from io import BytesIO
 
 import openpyxl
+from django.core.files.base import ContentFile
 from django.db import IntegrityError
 from rest_framework import permissions, views
 from rest_framework.parsers import (
@@ -11,7 +13,7 @@ from rest_framework.parsers import (
 )
 from rest_framework.response import Response
 
-from src.items.book_lookup import find_book_details
+from src.items.book_lookup import download_image, find_book_details
 from src.items.models import Book, Collection
 from src.scripts.serializers import FileUploadSerializer
 
@@ -35,46 +37,79 @@ class ImportBooksFromISBNS(views.APIView):
         COLLECTION_ID = Collection.objects.find(organization_id=ORGANIZATION_ID).first()
         file = request.FILES["file"]
         isbns = read_isbns_from_xls_file(file=file)
-        status = {"not_found": [], "duplicates": [], "success": []}
+        status = {"not_found": [], "duplicates": [], "success": [], "error": []}
         for index, isbn in enumerate(isbns):
-            book = find_book_details(isbn=isbn)
-            if book:
-                print(f"✅{index + 1}/{len(isbns)} found : {book.title} - {isbn}")
-                # books.append(book)
-                db_book = Book(
-                    organization_id=ORGANIZATION_ID,
-                    author=book.author,
-                    title=book.title,
-                    isbn=book.isbn,
-                    publisher=book.publisher,
-                    picture=book.author,
-                    lang=book.language,
-                    inventory=1,
-                    published_year=book.published_year,
-                    description=book.description,
-                )
-                try:
-                    db_book.save()
-                except IntegrityError:
-                    status["duplicates"].append(book.isbn)
-                    print(f"⚠️{index + 1}/{len(isbns)} Duplicate : {isbn}")
-                else:
-                    db_book.collections.set([COLLECTION_ID])
-                    status["success"].append(book.isbn)
-                    print(f"✅{index + 1}/{len(isbns)} Duccess : {book.title} - {isbn}")
+            book_already_in_DB = Book.objects.filter(isbn=isbn).exists()
+            if book_already_in_DB:
+                status["duplicates"].append(isbn)
+                print(f"⚠️{index + 1}/{len(isbns)} Duplicate : {isbn}")
             else:
-                print(f"❌{index + 1}/{len(isbns)} Not found : {isbn}")
-                status["not_found"].append(isbn)
+                try:
+                    book = find_book_details(isbn=isbn)
+                except Exception as e:
+                    print(f"❌{index + 1}/{len(isbns)} Lookup Error : {e}")
+                    status["error"].append(isbn)
+                else:
+                    if book:
+                        print(
+                            f"✅{index + 1}/{len(isbns)} found : {book.title} - {isbn}"
+                        )
+                        db_book = Book(
+                            organization_id=ORGANIZATION_ID,
+                            author=book.author,
+                            title=book.title,
+                            isbn=book.isbn,
+                            publisher=book.publisher,
+                            # Todo : fix picture
+                            # picture=book.author,
+                            lang=book.language,
+                            inventory=1,
+                            published_year=book.published_year,
+                            description=book.description,
+                        )
+                        try:
+                            db_book.save()
+                        except IntegrityError:
+                            status["duplicates"].append(book.isbn)
+                            print(f"⚠️{index + 1}/{len(isbns)} Duplicate : {isbn}")
+                        except Exception as e:
+                            print(f"❌{index + 1}/{len(isbns)} Saving Error : {e}")
+                            status["error"].append(isbn)
+                        else:
+                            db_book.collections.set([COLLECTION_ID])
+                            status["success"].append(book.isbn)
+                            print(
+                                f"✅{index + 1}/{len(isbns)} Success : {book.title} - {isbn}"
+                            )
+                        try:
+                            image = download_image(url=book.picture)
+                            if image:
+                                db_book.picture.save(
+                                    name=book.title,
+                                    content=ContentFile(image),
+                                    save=True,
+                                )
+                        except Exception as e:
+                            print(
+                                f"⚠️{index + 1}/{len(isbns)} No picture : {isbn} - {e}"
+                            )
+
+                    else:
+                        print(f"❌{index + 1}/{len(isbns)} Not found : {isbn}")
+                        status["not_found"].append(isbn)
+
+        status |= {
+            "not_found_count": len(status["not_found"]),
+            "duplicates_count": len(status["duplicates"]),
+            "success_count": len(status["success"]),
+            "error": len(status["error"]),
+        }
+
+        with open("import_log.json", "w") as file:
+            json.dump(status, file)
 
         return Response(
-            {
-                "status": status
-                | {
-                    "not_found_count": len(status["not_found"]),
-                    "duplicates_count": len(status["duplicates"]),
-                    "success_count": len(status["success"]),
-                }
-            },
+            {"status": status},
             status=200,
         )
 

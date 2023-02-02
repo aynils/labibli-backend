@@ -56,7 +56,7 @@ class BooksList(generics.ListCreateAPIView):
         category_ids = self.request.query_params.getlist("categoryId")
         queryset = Book.objects.filter(
             organization=user.employee_of_organization
-        ).order_by("-featured")
+        ).order_by("-featured", "-created_at")
         if query:
             queryset = queryset.filter(
                 Q(title__unaccent__icontains=query)

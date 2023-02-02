@@ -55,8 +55,8 @@ def get_open_library_book_information(isbn: str) -> dict or None:
     if response.status_code == 200 and response.json():
         volume = response.json().get(f"ISBN:{isbn}", {}).get("details")
         if volume:
-            authors = [author.name for author in volume.get("authors", [])]
-            publishers = [publisher.name for publisher in volume.get("publishers", [])]
+            authors = [author.get("name") for author in volume.get("authors", [])]
+            publishers = [publisher for publisher in volume.get("publishers", [])]
             cover_id = volume.get("covers", [])[0]
             return {
                 "title": volume.get("title"),
@@ -82,7 +82,9 @@ def get_wikipedia_book_information(isbn: str) -> dict or None:
             authors = [
                 f"{author[0]} {author[1]}" for author in volume.get("author", [])
             ]
-            publishers = [publisher.name for publisher in volume.get("publishers", [])]
+            publishers = [volume.get("publishers", "")] or [
+                publisher.name for publisher in volume.get("publishers", [])
+            ]
             # cover_id = volume.get('covers', [])[0]
             return {
                 "title": volume.get("title"),
