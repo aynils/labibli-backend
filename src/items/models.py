@@ -61,6 +61,7 @@ class Book(models.Model):
     published_year = models.CharField(
         max_length=255, unique=False, blank=True, null=True
     )
+    location = models.CharField(max_length=255, unique=False, blank=True, null=True)
     description = models.TextField(unique=False, blank=True, null=True)
     categories = models.ManyToManyField(Category, blank=True)
     collections = models.ManyToManyField(Collection, blank=True)

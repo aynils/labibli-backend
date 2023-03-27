@@ -335,6 +335,14 @@ class BookTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json().get("title"), "New Title")
 
+    def test_update_book_location(self):
+        authenticate_user(self)
+        url = reverse("get_put_patch_delete_book", kwargs={"pk": self.books[0].id})
+        data = {"location": "New Location", "collections": []}
+        response = self.client.patch(url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json().get("location"), "New Location")
+
     def test_delete_book(self):
         authenticate_user(self)
         url = reverse("get_put_patch_delete_book", kwargs={"pk": self.books[0].id})

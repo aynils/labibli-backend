@@ -81,6 +81,7 @@ class BookSerializer(serializers.ModelSerializer):
             "collections",
             "organization",
             "id",
+            "location",
         ]
 
 
