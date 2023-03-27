@@ -68,8 +68,10 @@ class Book(models.Model):
 
     @property
     def status(self):
-        is_borrowed = Lending.objects.filter(book=self, returned_at__isnull=True)
-        if is_borrowed:
+        is_borrowed_count = Lending.objects.filter(
+            book=self, returned_at__isnull=True
+        ).count()
+        if is_borrowed_count >= self.inventory:
             return "borrowed"
         else:
             return "available"
