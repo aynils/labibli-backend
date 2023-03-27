@@ -71,7 +71,7 @@ class Book(models.Model):
         is_borrowed_count = Lending.objects.filter(
             book=self, returned_at__isnull=True
         ).count()
-        if is_borrowed_count >= self.inventory:
+        if is_borrowed_count >= (self.inventory or 1):
             return "borrowed"
         else:
             return "available"
