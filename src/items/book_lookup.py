@@ -57,16 +57,19 @@ def get_open_library_book_information(isbn: str) -> dict or None:
         if volume:
             authors = [author.get("name") for author in volume.get("authors", [])]
             publishers = [publisher for publisher in volume.get("publishers", [])]
-            cover_id = volume.get("covers", [])[0]
+            cover_id = volume.get("covers", [None])[0]
+            cover_url = (
+                f"https://covers.openlibrary.org/b/id/{cover_id}.jpg"
+                if cover_id
+                else None
+            )
             return {
                 "title": volume.get("title"),
                 "isbn": isbn,
                 "author": ", ".join(authors),
                 "publisher": ", ".join(publishers),
-                "cover": f"https://covers.openlibrary.org/b/id/{cover_id}.jpg",
-                "published_year": volume.publishedDate.split(" ")[0]
-                if volume.get("publishedDate")
-                else None,
+                "cover": cover_url,
+                "published_year": volume.get("publish_date"),
                 "description": volume.get("description"),
             }
     return None

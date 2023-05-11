@@ -17,12 +17,15 @@ from src.items.book_lookup import download_image, find_book_details
 from src.items.models import Book, Collection
 from src.scripts.serializers import FileUploadSerializer
 
-# ORGANIZATION_ID = 1
-# COLLECTION_ID = 1
+ORGANIZATION_ID = 1
+COLLECTION_ID = 1
+
+LOCAL_RUN = False
 
 
 class ImportBooksFromISBNS(views.APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    if not LOCAL_RUN:
+        permission_classes = [permissions.IsAuthenticated]
     """
     Curl example request :
     curl -F file=@ISBN_test.xlsx http://localhost:8000/scripts/import/
@@ -33,8 +36,11 @@ class ImportBooksFromISBNS(views.APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser, FileUploadParser)
 
     def post(self, request):
-        ORGANIZATION_ID = request.user.employee_of_organization_id
-        COLLECTION_ID = Collection.objects.find(organization_id=ORGANIZATION_ID).first()
+        if not LOCAL_RUN:
+            ORGANIZATION_ID = request.user.employee_of_organization_id
+            COLLECTION_ID = Collection.objects.find(
+                organization_id=ORGANIZATION_ID
+            ).first()
         file = request.FILES["file"]
         isbns = read_isbns_from_xls_file(file=file)
         status = {"not_found": [], "duplicates": [], "success": [], "error": []}
