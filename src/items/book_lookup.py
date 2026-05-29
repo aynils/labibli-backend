@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 
 import requests
@@ -5,6 +6,11 @@ import requests
 GOOGLE_URL = "https://www.googleapis.com/books/v1/volumes"
 OPEN_LIBRARY_URL = "https://openlibrary.org/api/books"
 WIKIPEDIA_URL = "https://en.wikipedia.org/api/rest_v1/data/citation/mediawiki/"
+
+HEADERS = {"User-Agent": "LaBibli/1.0 (https://labibli.com; contact@labibli.com)"}
+TIMEOUT = 5
+
+GOOGLE_BOOKS_API_KEY = os.environ.get("GOOGLE_BOOKS_API_KEY")
 
 
 @dataclass
@@ -26,7 +32,12 @@ def get_google_book_information(isbn: str) -> dict or None:
         "fields": "items/volumeInfo(title,authors,publisher,publishedDate,language,description,pageCount,imageLinks)",
         "maxResults": 1,
     }
-    response = requests.get(url=GOOGLE_URL, params=params)
+    if GOOGLE_BOOKS_API_KEY:
+        params["key"] = GOOGLE_BOOKS_API_KEY
+    try:
+        response = requests.get(url=GOOGLE_URL, params=params, headers=HEADERS, timeout=TIMEOUT)
+    except requests.RequestException:
+        return None
     if response.status_code == 200 and response.json().get("items"):
         volume = response.json().get("items")[0].get("volumeInfo")
         return {
@@ -49,7 +60,10 @@ def get_open_library_book_information(isbn: str) -> dict or None:
         "jscmd": "details",
         "format": "json",
     }
-    response = requests.get(url=OPEN_LIBRARY_URL, params=params)
+    try:
+        response = requests.get(url=OPEN_LIBRARY_URL, params=params, headers=HEADERS, timeout=TIMEOUT)
+    except requests.RequestException:
+        return None
     if response.status_code == 200 and response.json():
         volume = response.json().get(f"ISBN:{isbn}", {}).get("details")
         if volume:
@@ -74,24 +88,24 @@ def get_open_library_book_information(isbn: str) -> dict or None:
 
 
 def get_wikipedia_book_information(isbn: str) -> dict or None:
-    params = {}
     url = f"{WIKIPEDIA_URL}{isbn}"
-    response = requests.get(url=url, params=params)
+    try:
+        response = requests.get(url=url, headers=HEADERS, timeout=TIMEOUT)
+    except requests.RequestException:
+        return None
     if response.status_code == 200 and response.json():
         volume = response.json()[0]
         if volume:
             authors = [
-                f"{author[0]} {author[1]}" for author in volume.get("author", [])
+                f"{author[0]} {author[1]}"
+                for author in volume.get("author", [])
+                if isinstance(author, (list, tuple)) and len(author) >= 2
             ]
-            publishers = [volume.get("publishers", "")] or [
-                publisher.name for publisher in volume.get("publishers", [])
-            ]
-            # cover_id = volume.get('covers', [])[0]
             return {
                 "title": volume.get("title"),
                 "isbn": isbn,
                 "author": ", ".join(authors),
-                "publisher": ", ".join(publishers),
+                "publisher": volume.get("publisher"),
                 "cover": None,
                 "published_year": volume.get("date"),
                 "description": volume.get("abstractNote"),
@@ -102,15 +116,21 @@ def get_wikipedia_book_information(isbn: str) -> dict or None:
 
 
 def get_open_library_cover(isbn: str) -> str:
-    url = f"http://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false"
-    response = requests.get(url=url)
+    url = f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false"
+    try:
+        response = requests.get(url=url, headers=HEADERS, timeout=TIMEOUT)
+    except requests.RequestException:
+        return None
     if response.status_code == 200:
         return url
 
 
 def get_les_librairies_cover(isbn: str) -> str:
     url = f"https://images.leslibraires.ca/books/{isbn}/front/{isbn}_large.jpg"
-    response = requests.get(url=url)
+    try:
+        response = requests.get(url=url, headers=HEADERS, timeout=TIMEOUT)
+    except requests.RequestException:
+        return None
     if response.status_code == 200:
         return url
 
@@ -155,6 +175,9 @@ def find_book_details(isbn: str) -> BookDetails:
 
 
 def download_image(url: str):
-    response = requests.get(url)
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+    except requests.RequestException:
+        return None
     if response.status_code == 200:
         return response.content
