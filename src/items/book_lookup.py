@@ -1,5 +1,6 @@
 import os
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 import requests
@@ -205,10 +206,14 @@ def get_les_librairies_cover(isbn: str) -> str:
 
 
 def get_cover(isbn: str) -> str:
-    open_library_cover = get_open_library_cover(isbn=isbn)
-    if open_library_cover:
-        return open_library_cover
-    return get_les_librairies_cover(isbn=isbn)
+    sources = [get_open_library_cover, get_les_librairies_cover]
+    with ThreadPoolExecutor(max_workers=len(sources)) as executor:
+        futures = {executor.submit(fn, isbn): fn for fn in sources}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                return result
+    return None
 
 
 def get_book_information(isbn: str):
@@ -236,20 +241,21 @@ def get_book_information(isbn: str):
 
 def find_book_details(isbn: str) -> BookDetails:
     book = get_book_information(isbn=isbn)
-    cover = get_cover(isbn=isbn)
+    if not book:
+        return None
 
-    if book:
-        return BookDetails(
-            isbn=isbn,
-            title=book.get("title"),
-            picture=cover or book.get("cover"),
-            author=book.get("author"),
-            publisher=book.get("publisher"),
-            published_year=book.get("published_year"),
-            description=book.get("description"),
-            page_count=book.get("page_count"),
-            language=book.get("language"),
-        )
+    cover = get_cover(isbn=isbn) or book.get("cover")
+    return BookDetails(
+        isbn=isbn,
+        title=book.get("title"),
+        picture=cover,
+        author=book.get("author"),
+        publisher=book.get("publisher"),
+        published_year=book.get("published_year"),
+        description=book.get("description"),
+        page_count=book.get("page_count"),
+        language=book.get("language"),
+    )
 
 
 def download_image(url: str):
