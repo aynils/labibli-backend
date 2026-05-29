@@ -22,7 +22,7 @@ class BookDetails:
 
 def get_google_book_information(isbn: str) -> dict or None:
     params = {
-        "q": "isbn:${isbn}",
+        "q": f"isbn:{isbn}",
         "fields": "items/volumeInfo(title,authors,publisher,publishedDate,language,description,pageCount,imageLinks)",
         "maxResults": 1,
     }
@@ -34,10 +34,8 @@ def get_google_book_information(isbn: str) -> dict or None:
             "isbn": isbn,
             "author": ", ".join(volume.get("authors", [])),
             "publisher": volume.get("publisher"),
-            "cover": volume.imageLinks if volume.get("imageLinks.thumbnail") else None,
-            "published_year": volume.publishedDate[0:4]
-            if volume.get("publishedDate")
-            else None,
+            "cover": volume.get("imageLinks", {}).get("thumbnail"),
+            "published_year": volume.get("publishedDate", "")[:4] or None,
             "description": volume.get("description"),
             "page_count": volume.get("pageCount"),
             "language": volume.get("language"),
