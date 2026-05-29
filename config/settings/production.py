@@ -64,7 +64,14 @@ LOGGING = {
 }
 
 # Store images on Digital Ocean S3
-DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 AWS_S3_REGION_NAME = "sfo3"
 AWS_S3_ENDPOINT_URL = f"https://{AWS_S3_REGION_NAME}.digitaloceanspaces.com"
 AWS_ACCESS_KEY_ID = "DTVCT6IDQJFR3ZKED7DD"
