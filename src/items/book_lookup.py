@@ -1,4 +1,5 @@
 import os
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
 import requests
@@ -6,11 +7,18 @@ import requests
 GOOGLE_URL = "https://www.googleapis.com/books/v1/volumes"
 OPEN_LIBRARY_URL = "https://openlibrary.org/api/books"
 WIKIPEDIA_URL = "https://en.wikipedia.org/api/rest_v1/data/citation/mediawiki/"
+BNF_SRU_URL = "https://catalogue.bnf.fr/api/SRU"
 
 HEADERS = {"User-Agent": "LaBibli/1.0 (https://labibli.com; contact@labibli.com)"}
 TIMEOUT = 5
 
 GOOGLE_BOOKS_API_KEY = os.environ.get("GOOGLE_BOOKS_API_KEY")
+
+BNF_NS = {
+    "srw": "http://www.loc.gov/zing/srw/",
+    "dc": "http://purl.org/dc/elements/1.1/",
+    "oai_dc": "http://www.openarchives.org/OAI/2.0/oai_dc/",
+}
 
 
 @dataclass
@@ -115,6 +123,67 @@ def get_wikipedia_book_information(isbn: str) -> dict or None:
     return None
 
 
+def get_bnf_book_information(isbn: str) -> dict or None:
+    params = {
+        "version": "1.2",
+        "operation": "searchRetrieve",
+        "query": f'bib.isbn adj "{isbn}"',
+        "recordSchema": "dublincore",
+        "maximumRecords": 1,
+    }
+    try:
+        response = requests.get(url=BNF_SRU_URL, params=params, headers=HEADERS, timeout=TIMEOUT)
+    except requests.RequestException:
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        root = ET.fromstring(response.content)
+    except ET.ParseError:
+        return None
+
+    num_records_el = root.find("srw:numberOfRecords", BNF_NS)
+    try:
+        if not num_records_el or int(num_records_el.text) == 0:
+            return None
+    except (ValueError, TypeError):
+        return None
+
+    record_data = root.find(".//srw:recordData/oai_dc:dc", BNF_NS)
+    if record_data is None:
+        return None
+
+    title_raw = record_data.findtext("dc:title", namespaces=BNF_NS)
+    if not title_raw:
+        return None
+
+    # "Mon amie Flicka / Mary O'Hara ; traduit..." → "Mon amie Flicka"
+    title = title_raw.split(" / ")[0].strip()
+
+    creators = [el.text for el in record_data.findall("dc:creator", BNF_NS) if el.text]
+    # "O'Hara, Mary (1885-1980). Auteur du texte" → "O'Hara, Mary"
+    authors = [c.split(" (")[0].strip() for c in creators]
+
+    publisher_raw = record_data.findtext("dc:publisher", namespaces=BNF_NS)
+    # "Gallimard-Jeunesse (Paris)" → "Gallimard-Jeunesse"
+    publisher = publisher_raw.split(" (")[0].strip() if publisher_raw else None
+
+    date = record_data.findtext("dc:date", namespaces=BNF_NS)
+    language = record_data.findtext("dc:language", namespaces=BNF_NS)
+
+    return {
+        "title": title,
+        "isbn": isbn,
+        "author": ", ".join(authors) if authors else None,
+        "publisher": publisher,
+        "cover": None,
+        "published_year": (date or "")[:4] or None,
+        "description": None,  # BnF descriptions are catalog notes, not synopses
+        "page_count": None,
+        "language": language,
+    }
+
+
 def get_open_library_cover(isbn: str) -> str:
     url = f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false"
     try:
@@ -150,9 +219,18 @@ def get_book_information(isbn: str):
             if google_book:
                 wikipedia_book["description"] = google_book.get("description")
         return wikipedia_book
+
     google_book = get_google_book_information(isbn=isbn)
     if google_book:
         return google_book
+
+    bnf_book = get_bnf_book_information(isbn=isbn)
+    if bnf_book:
+        google_book = get_google_book_information(isbn=isbn)
+        if google_book:
+            bnf_book["description"] = google_book.get("description")
+        return bnf_book
+
     return get_open_library_book_information(isbn=isbn)
 
 
