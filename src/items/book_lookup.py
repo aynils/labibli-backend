@@ -171,12 +171,26 @@ def get_bnf_book_information(isbn: str) -> dict or None:
     date = record_data.findtext("dc:date", namespaces=BNF_NS)
     language = record_data.findtext("dc:language", namespaces=BNF_NS)
 
+    ark_id = next(
+        (el.text for el in record_data.findall("dc:identifier", BNF_NS)
+         if el.text and el.text.startswith("ark:")),
+        None,
+    )
+    cover = None
+    if ark_id:
+        cover_url = f"https://catalogue.bnf.fr/couverture?appName=NE&idArk={ark_id}&couverture=1"
+        try:
+            if requests.get(url=cover_url, headers=HEADERS, timeout=TIMEOUT).status_code == 200:
+                cover = cover_url
+        except requests.RequestException:
+            pass
+
     return {
         "title": title,
         "isbn": isbn,
         "author": ", ".join(authors) if authors else None,
         "publisher": publisher,
-        "cover": None,
+        "cover": cover,
         "published_year": (date or "")[:4] or None,
         "description": None,  # BnF descriptions are catalog notes, not synopses
         "page_count": None,
