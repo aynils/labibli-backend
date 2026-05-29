@@ -1,6 +1,5 @@
 import os
 import xml.etree.ElementTree as ET
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 import requests
@@ -185,7 +184,7 @@ def get_bnf_book_information(isbn: str) -> dict or None:
     }
 
 
-def get_open_library_cover(isbn: str) -> str:
+def get_cover(isbn: str) -> str:
     url = f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false"
     try:
         response = requests.get(url=url, headers=HEADERS, timeout=TIMEOUT)
@@ -193,26 +192,6 @@ def get_open_library_cover(isbn: str) -> str:
         return None
     if response.status_code == 200:
         return url
-
-
-def get_les_librairies_cover(isbn: str) -> str:
-    url = f"https://images.leslibraires.ca/books/{isbn}/front/{isbn}_large.jpg"
-    try:
-        response = requests.get(url=url, headers=HEADERS, timeout=TIMEOUT)
-    except requests.RequestException:
-        return None
-    if response.status_code == 200:
-        return url
-
-
-def get_cover(isbn: str) -> str:
-    sources = [get_open_library_cover, get_les_librairies_cover]
-    with ThreadPoolExecutor(max_workers=len(sources)) as executor:
-        futures = {executor.submit(fn, isbn): fn for fn in sources}
-        for future in as_completed(futures):
-            result = future.result()
-            if result:
-                return result
     return None
 
 
