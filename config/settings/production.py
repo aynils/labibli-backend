@@ -2,6 +2,7 @@ import sys
 
 import dj_database_url
 import sentry_sdk
+from django.core.exceptions import DisallowedHost
 from sentry_sdk.integrations.django import DjangoIntegration
 
 from .base import *  # noqa
@@ -34,6 +35,10 @@ sentry_sdk.init(
     # of transactions for performance monitoring.
     # We recommend adjusting this value in production.
     traces_sample_rate=0.01,
+    # Bots probing the raw *.ondigitalocean.app hostnames are rejected by
+    # ALLOWED_HOSTS before URL resolution. Nothing to act on, and the volume
+    # drowns out the real signal.
+    ignore_errors=[DisallowedHost],
     # If you wish to associate users to errors (assuming you are using
     # django.contrib.auth) you may enable sending PII data.
     send_default_pii=True,
