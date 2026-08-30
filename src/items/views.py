@@ -11,6 +11,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from src.helpers.query_params import is_true
 from src.items.book_lookup import download_image, find_book_details
 from src.items.models import Book, Category, Collection, Lending
 from src.items.serializers import (
@@ -63,10 +64,15 @@ class BooksList(generics.ListCreateAPIView):
                 | Q(author__unaccent__icontains=query)
                 | Q(isbn__unaccent__icontains=query)
             )
-        if available and available.lower() in ["true", "1", "t", "y", "yes"]:
+        if is_true(available):
             queryset = queryset.filter(
                 Q(lendings__isnull=True) | Q(lendings__returned_at__isnull=False)
             )
+        if not is_true(self.request.query_params.get("archived")):
+            # Archivé vaut caché : un ouvrage sorti de la circulation n'a pas
+            # à encombrer la liste. Il reste atteignable par « archived=true »,
+            # sans quoi il deviendrait impossible de le désarchiver.
+            queryset = queryset.exclude(archived=True)
         for category_id in category_ids:
             queryset = queryset.filter(categories__in=[category_id])
         return queryset
@@ -105,6 +111,17 @@ class CollectionShared(generics.RetrieveAPIView):
     lookup_field = "slug"
     queryset = Collection.objects.all()
     serializer_class = CollectionSerializer
+
+    def get_serializer_context(self):
+        """Signale au sérialiseur qu'il travaille pour la vitrine publique.
+
+        Le même sérialiseur sert les écrans de la bibliothèque, où les
+        ouvrages archivés doivent rester visibles : seul ce drapeau les
+        retire, et seulement ici.
+        """
+        context = super().get_serializer_context()
+        context["public"] = True
+        return context
 
 
 class CollectionsList(generics.ListCreateAPIView):

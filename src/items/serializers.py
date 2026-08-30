@@ -5,6 +5,7 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from src.customers.serializers import CustomerSerializer
+from src.helpers.query_params import is_true, positive_int
 from src.items.models import Book, Category, Collection, Lending
 
 
@@ -91,17 +92,28 @@ class CollectionSerializer(serializers.ModelSerializer):
     books = serializers.SerializerMethodField("paginated_books")
 
     def paginated_books(self, obj):
-        query = self.context.get("request").query_params.get("query")
-        available = self.context.get("request").query_params.get("available")
-        category_ids = self.context.get("request").query_params.getlist("categoryId")
+        request = self.context.get("request")
+        query = request.query_params.get("query")
+        available = request.query_params.get("available")
+        category_ids = request.query_params.getlist("categoryId")
         queryset = obj.book_set.order_by("-featured", "-created_at")
+        # Archivé vaut caché. La vitrine publique n'a même pas le droit de
+        # demander le contraire : un ouvrage sorti de la circulation ne doit
+        # pas être proposé à quelqu'un qui ne peut ni l'emprunter, ni savoir
+        # pourquoi il est grisé. Le filtre est ici et non côté navigateur,
+        # sinon la pagination compterait des ouvrages jamais affichés.
+        show_archived = not self.context.get("public") and is_true(
+            request.query_params.get("archived")
+        )
+        if not show_archived:
+            queryset = queryset.exclude(archived=True)
         if query:
             queryset = queryset.filter(
                 Q(title__unaccent__icontains=query)
                 | Q(author__unaccent__icontains=query)
                 | Q(isbn__unaccent__icontains=query)
             )
-        if available and available.lower() in ["true", "1", "t", "y", "yes"]:
+        if is_true(available):
             queryset = queryset.filter(
                 Q(lendings__isnull=True) | Q(lendings__returned_at__isnull=False)
             )
@@ -109,12 +121,16 @@ class CollectionSerializer(serializers.ModelSerializer):
         for category_id in category_ids:
             queryset = queryset.filter(categories__in=[category_id])
 
-        page_size = (
-            self.context["request"].query_params.get("size")
-            or settings.DEFAULT_BOOK_PAGE_SIZE
+        page_size = positive_int(
+            request.query_params.get("size"), settings.DEFAULT_BOOK_PAGE_SIZE
         )
         paginator = Paginator(queryset.all(), page_size)
-        page = int(self.context["request"].query_params.get("page") or 1)
+        # La page demandée est ramenée dans les bornes plutôt que de lever.
+        # Une vitrine publique reçoit des liens partagés et des numéros de
+        # page tapés à la main, et masquer des ouvrages fait rétrécir la
+        # pagination : une page hier valide rendait sinon une erreur 500.
+        page = positive_int(request.query_params.get("page"), 1)
+        page = min(page, paginator.num_pages)
 
         books = paginator.page(page)
         serializer = BookSerializer(books, many=True)
@@ -146,7 +162,6 @@ class CollectionSerializer(serializers.ModelSerializer):
             "name",
             "organization",
             "books",
-            "book_set",
             "slug",
             "organization_email",
         ]
