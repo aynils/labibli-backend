@@ -1,16 +1,29 @@
 import os
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import requests
+
+from src.helpers.text_matching import significant_words
 
 GOOGLE_URL = "https://www.googleapis.com/books/v1/volumes"
 OPEN_LIBRARY_URL = "https://openlibrary.org/api/books"
 WIKIPEDIA_URL = "https://en.wikipedia.org/api/rest_v1/data/citation/mediawiki/"
+WIKIPEDIA_FR_API = "https://fr.wikipedia.org/w/api.php"
+WIKIPEDIA_FR_SUMMARY = "https://fr.wikipedia.org/api/rest_v1/page/summary/"
 BNF_SRU_URL = "https://catalogue.bnf.fr/api/SRU"
 
 HEADERS = {"User-Agent": "LaBibli/1.0 (https://labibli.com; contact@labibli.com)"}
 TIMEOUT = 5
+
+# Google Books alterne les 503 : mesuré à 0 réponse sur 8 au premier appel,
+# et 4 sur 8 en réessayant. Sans réessai, la fiche revient vide — ou le livre
+# entier reste introuvable, puisque Google porte aussi les descriptions.
+RETRY_STATUSES = (429, 500, 502, 503, 504)
+RETRY_ATTEMPTS = 3
+RETRY_PAUSE = 0.6
 
 GOOGLE_BOOKS_API_KEY = os.environ.get("GOOGLE_BOOKS_API_KEY")
 
@@ -34,6 +47,24 @@ class BookDetails:
     language: str
 
 
+def get_with_retry(url, params=None, attempts=RETRY_ATTEMPTS):
+    """Un GET qui insiste quand le service répond « reviens plus tard ».
+
+    Seuls les codes transitoires sont réessayés : un 404 est une réponse,
+    pas une panne.
+    """
+    for attempt in range(attempts):
+        try:
+            response = requests.get(url=url, params=params, headers=HEADERS, timeout=TIMEOUT)
+        except requests.RequestException:
+            return None
+        if response.status_code not in RETRY_STATUSES:
+            return response
+        if attempt < attempts - 1:
+            time.sleep(RETRY_PAUSE)
+    return None
+
+
 def get_google_book_information(isbn: str) -> dict or None:
     params = {
         "q": f"isbn:{isbn}",
@@ -42,9 +73,8 @@ def get_google_book_information(isbn: str) -> dict or None:
     }
     if GOOGLE_BOOKS_API_KEY:
         params["key"] = GOOGLE_BOOKS_API_KEY
-    try:
-        response = requests.get(url=GOOGLE_URL, params=params, headers=HEADERS, timeout=TIMEOUT)
-    except requests.RequestException:
+    response = get_with_retry(url=GOOGLE_URL, params=params)
+    if response is None:
         return None
     if response.status_code == 200 and response.json().get("items"):
         volume = response.json().get("items")[0].get("volumeInfo")
@@ -198,6 +228,76 @@ def get_bnf_book_information(isbn: str) -> dict or None:
     }
 
 
+def search_wikipedia_fr_articles(title: str, author: str, limit: int = 3) -> list:
+    """Titres d'articles de Wikipédia FR susceptibles de parler de ce livre.
+
+    L'article ne porte pas toujours le titre du livre : « Si c'était à
+    refaire » y est « Si c'était à refaire (roman) ». On passe donc par la
+    recherche plutôt que de deviner l'adresse.
+    """
+    query = f'intitle:"{title}"'
+    if author:
+        query += f" {author}"
+    params = {
+        "action": "query", "list": "search", "srsearch": query,
+        "srlimit": limit, "format": "json",
+    }
+    try:
+        response = requests.get(url=WIKIPEDIA_FR_API, params=params, headers=HEADERS, timeout=TIMEOUT)
+    except requests.RequestException:
+        return []
+    if response.status_code != 200:
+        return []
+    try:
+        results = response.json().get("query", {}).get("search", [])
+    except ValueError:
+        return []
+    return [result["title"] for result in results if result.get("title")]
+
+
+def get_wikipedia_fr_summary(title: str, author: str) -> str:
+    """Le résumé d'un livre sur Wikipédia FR, ou None si rien ne se prouve.
+
+    Deux garde-fous, parce qu'un résumé faux sur une fiche de bibliothèque
+    est pire qu'une fiche sans résumé :
+
+    - les pages d'homonymie sont écartées (« Anges et démons » en est une) ;
+    - le nom de l'auteur doit apparaître dans l'extrait, sinon rien ne dit
+      que l'article parle du bon ouvrage.
+
+    Cette source ne demande ni clé ni quota, contrairement à Google Books
+    qui alterne les 503 et laissait les résumés vides.
+    """
+    if not title:
+        return None
+    author_words = significant_words(author)
+    for article in search_wikipedia_fr_articles(title=title, author=author):
+        try:
+            response = requests.get(
+                url=f"{WIKIPEDIA_FR_SUMMARY}{quote(article, safe='')}",
+                headers=HEADERS, timeout=TIMEOUT,
+            )
+        except requests.RequestException:
+            continue
+        if response.status_code != 200:
+            continue
+        try:
+            page = response.json()
+        except ValueError:
+            continue
+        if page.get("type") != "standard":
+            continue
+        extract = (page.get("extract") or "").strip()
+        if not extract:
+            continue
+        # Sans auteur connu, on ne peut rien prouver : on s'abstient.
+        if not author_words:
+            return None
+        if author_words & significant_words(extract):
+            return extract
+    return None
+
+
 def get_cover(isbn: str) -> str:
     url = f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false"
     try:
@@ -238,6 +338,13 @@ def find_book_details(isbn: str) -> BookDetails:
         return None
 
     cover = get_cover(isbn=isbn) or book.get("cover")
+    description = book.get("description")
+    if not description:
+        # Aucune des sources par ISBN ne rend de résumé fiable : Wikipédia
+        # en donne un, gratuitement et sans quota.
+        description = get_wikipedia_fr_summary(
+            title=book.get("title"), author=book.get("author")
+        )
     return BookDetails(
         isbn=isbn,
         title=book.get("title"),
@@ -245,7 +352,7 @@ def find_book_details(isbn: str) -> BookDetails:
         author=book.get("author"),
         publisher=book.get("publisher"),
         published_year=book.get("published_year"),
-        description=book.get("description"),
+        description=description,
         page_count=book.get("page_count"),
         language=book.get("language"),
     )
