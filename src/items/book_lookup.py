@@ -1,7 +1,10 @@
+import logging
 import os
 import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from functools import partial
 from urllib.parse import quote
 
 import requests
@@ -21,11 +24,16 @@ TIMEOUT = 5
 # Google Books alterne les 503 : mesuré à 0 réponse sur 8 au premier appel,
 # et 4 sur 8 en réessayant. Sans réessai, la fiche revient vide — ou le livre
 # entier reste introuvable, puisque Google porte aussi les descriptions.
-RETRY_STATUSES = (429, 500, 502, 503, 504)
+# 429 n'y figure pas : il annonce un quota épuisé, que trois tentatives à
+# 0,6 s d'intervalle ne rouvriront pas. Sur un import de collection entière,
+# insister coûterait 1,2 s par ouvrage pour le même échec.
+RETRY_STATUSES = (500, 502, 503, 504)
 RETRY_ATTEMPTS = 3
 RETRY_PAUSE = 0.6
 
 GOOGLE_BOOKS_API_KEY = os.environ.get("GOOGLE_BOOKS_API_KEY")
+
+logger = logging.getLogger(__name__)
 
 BNF_NS = {
     "srw": "http://www.loc.gov/zing/srw/",
@@ -309,35 +317,95 @@ def get_cover(isbn: str) -> str:
     return None
 
 
+def fetch_in_parallel(tasks: dict) -> dict:
+    """Lance des appels réseau de front et rend leurs résultats par nom.
+
+    Les catalogues ne se parlent pas : les interroger l'un après l'autre
+    faisait payer à la bibliothécaire la somme de leurs délais alors qu'elle
+    n'attend, en vérité, que le plus lent. Le choix de la source reste au
+    dessus de cette fonction : ici on récolte tout, on ne préfère rien.
+
+    Une source qui lève ne doit jamais emporter les autres — une fiche
+    partielle vaut mieux qu'un scan qui échoue —, donc son résultat vaut
+    None et le reste continue.
+    """
+    results = {name: None for name in tasks}
+    if not tasks:
+        return results
+    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+        futures = {executor.submit(task): name for name, task in tasks.items()}
+        for future in as_completed(futures):
+            source = futures[future]
+            try:
+                results[source] = future.result()
+            except Exception as error:
+                # Isoler ne doit pas vouloir dire taire : si une source change
+                # de format, la panne serait sinon une dégradation silencieuse
+                # des métadonnées, identique chez les 17 organisations et
+                # invisible dans tout message.
+                logger.warning("Source %s indisponible : %s", source, error)
+                results[source] = None
+    return results
+
+
 def get_book_information(isbn: str):
-    wikipedia_book = get_wikipedia_book_information(isbn=isbn)
+    """La meilleure notice disponible pour cet ISBN.
+
+    L'ordre de préférence — Wikipédia, Google, BnF, OpenLibrary — encode une
+    qualité de notice, pas une commodité d'appel : la BnF est la meilleure
+    source du francophone, Google la plus large. Les quatre partent donc
+    ensemble, et c'est au dépouillement que la hiérarchie s'applique,
+    exactement comme du temps de la cascade.
+    """
+    catalogs = fetch_in_parallel({
+        "wikipedia": partial(get_wikipedia_book_information, isbn=isbn),
+        "google": partial(get_google_book_information, isbn=isbn),
+        "bnf": partial(get_bnf_book_information, isbn=isbn),
+        "open_library": partial(get_open_library_book_information, isbn=isbn),
+    })
+    google_book = catalogs["google"]
+
+    wikipedia_book = catalogs["wikipedia"]
     if wikipedia_book:
-        if not wikipedia_book.get("description"):
-            google_book = get_google_book_information(isbn=isbn)
-            if google_book:
-                wikipedia_book["description"] = google_book.get("description")
+        if not wikipedia_book.get("description") and google_book:
+            wikipedia_book["description"] = google_book.get("description")
         return wikipedia_book
 
-    google_book = get_google_book_information(isbn=isbn)
     if google_book:
         return google_book
 
-    bnf_book = get_bnf_book_information(isbn=isbn)
+    bnf_book = catalogs["bnf"]
     if bnf_book:
-        google_book = get_google_book_information(isbn=isbn)
+        if google_book is None:
+            # La cascade laissait ici une seconde chance à Google, qui alterne
+            # les 503 : on la garde, car une notice BnF n'a pas de résumé et
+            # Google est le seul à pouvoir le fournir. Elle passe par la même
+            # récolte que les autres pour hériter de la même isolation : une
+            # notice BnF ne doit pas se perdre parce que Google a déraillé.
+            google_book = fetch_in_parallel(
+                {"google": partial(get_google_book_information, isbn=isbn)}
+            )["google"]
         if google_book:
             bnf_book["description"] = google_book.get("description")
         return bnf_book
 
-    return get_open_library_book_information(isbn=isbn)
+    return catalogs["open_library"]
 
 
 def find_book_details(isbn: str) -> BookDetails:
-    book = get_book_information(isbn=isbn)
+    # La couverture ne dépend que de l'ISBN : la chercher pendant que les
+    # catalogues répondent l'efface du temps d'attente. Le prix est une
+    # requête de couverture même quand aucune notice ne sort — c'est un appel
+    # de plus contre plusieurs secondes de moins devant la douchette.
+    fetched = fetch_in_parallel({
+        "book": partial(get_book_information, isbn=isbn),
+        "cover": partial(get_cover, isbn=isbn),
+    })
+    book = fetched["book"]
     if not book:
         return None
 
-    cover = get_cover(isbn=isbn) or book.get("cover")
+    cover = fetched["cover"] or book.get("cover")
     description = book.get("description")
     if not description:
         # Aucune des sources par ISBN ne rend de résumé fiable : Wikipédia
