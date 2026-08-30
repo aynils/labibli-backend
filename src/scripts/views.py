@@ -36,16 +36,28 @@ class ImportBooksFromISBNS(views.APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser, FileUploadParser)
 
     def post(self, request):
-        if not LOCAL_RUN:
-            ORGANIZATION_ID = request.user.employee_of_organization_id
-            COLLECTION_ID = Collection.objects.find(
-                organization_id=ORGANIZATION_ID
+        if LOCAL_RUN:
+            organization_id = ORGANIZATION_ID
+            collection = Collection.objects.filter(pk=COLLECTION_ID).first()
+        else:
+            organization_id = request.user.employee_of_organization_id
+            if not organization_id:
+                return Response(
+                    {"detail": "Ce compte n'est rattaché à aucune organisation."},
+                    status=400,
+                )
+            collection = Collection.objects.filter(
+                organization_id=organization_id
             ).first()
         file = request.FILES["file"]
         isbns = read_isbns_from_xls_file(file=file)
         status = {"not_found": [], "duplicates": [], "success": [], "error": []}
         for index, isbn in enumerate(isbns):
-            book_already_in_DB = Book.objects.filter(isbn=isbn).exists()
+            # Le doublon se juge dans l'organisation qui importe : le même ISBN
+            # catalogué par une autre bibliothèque ne la concerne pas.
+            book_already_in_DB = Book.objects.filter(
+                isbn=isbn, organization_id=organization_id
+            ).exists()
             if book_already_in_DB:
                 status["duplicates"].append(isbn)
                 print(f"⚠️{index + 1}/{len(isbns)} Duplicate : {isbn}")
@@ -61,7 +73,7 @@ class ImportBooksFromISBNS(views.APIView):
                             f"✅{index + 1}/{len(isbns)} found : {book.title} - {isbn}"
                         )
                         db_book = Book(
-                            organization_id=ORGANIZATION_ID,
+                            organization_id=organization_id,
                             author=book.author,
                             title=book.title,
                             isbn=book.isbn,
@@ -82,7 +94,8 @@ class ImportBooksFromISBNS(views.APIView):
                             print(f"❌{index + 1}/{len(isbns)} Saving Error : {e}")
                             status["error"].append(isbn)
                         else:
-                            db_book.collections.set([COLLECTION_ID])
+                            if collection:
+                                db_book.collections.set([collection])
                             status["success"].append(book.isbn)
                             print(
                                 f"✅{index + 1}/{len(isbns)} Success : {book.title} - {isbn}"
