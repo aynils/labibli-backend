@@ -1,143 +1,71 @@
-import json
-from io import BytesIO
+"""Point d'entrée HTTP des imports en masse.
 
-import openpyxl
-from django.core.files.base import ContentFile
-from django.db import IntegrityError
+La vue ne fait que trois choses : établir dans quelle organisation on
+importe, lire le fichier, et rendre le compte rendu. Tout ce qui touche aux
+ouvrages ou aux membres vit dans `src/items/book_import.py` et
+`src/customers/customer_import.py`, au-dessus du socle `src/imports/` — la
+mécanique d'un import ne doit exister qu'une fois.
+"""
 from rest_framework import permissions, views
-from rest_framework.parsers import (
-    FileUploadParser,
-    FormParser,
-    JSONParser,
-    MultiPartParser,
-)
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
-from src.items.book_lookup import download_image, find_book_details
-from src.items.models import Book, Collection
-from src.scripts.serializers import FileUploadSerializer
+from src.customers.customer_import import COLUMNS as CUSTOMER_COLUMNS
+from src.customers.customer_import import CustomerImporter
+from src.imports.readers import ImportFileError, read_rows
+from src.imports.runner import run_import
+from src.items.book_import import COLUMNS as BOOK_COLUMNS
+from src.items.book_import import BookImporter
+from src.items.models import Collection
+from src.labibli.permissions import IsEmployeeOfAnOrganization
 
-ORGANIZATION_ID = 1
-COLLECTION_ID = 1
+KINDS = {
+    "books": (BOOK_COLUMNS, "ouvrages"),
+    "customers": (CUSTOMER_COLUMNS, "membres"),
+}
 
-LOCAL_RUN = False
 
+class ImportFromFile(views.APIView):
+    """Importe des ouvrages ou des membres depuis un tableur ou un CSV.
 
-class ImportBooksFromISBNS(views.APIView):
-    if not LOCAL_RUN:
-        permission_classes = [permissions.IsAuthenticated]
+    curl -F file=@collection.xlsx -F kind=books http://localhost:8000/scripts/import/
     """
-    Curl example request :
-    curl -F file=@ISBN_test.xlsx http://localhost:8000/scripts/import/
-    -H "Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    -H 'Content-Disposition: attachment;filename="ISBN_test.xlsx"'
-    """
-    serializer = FileUploadSerializer
-    parser_classes = (MultiPartParser, FormParser, JSONParser, FileUploadParser)
+
+    # Les deux, comme partout ailleurs dans le dépôt : sans
+    # `IsAuthenticated`, un anonyme atteint `IsEmployeeOfAnOrganization` qui
+    # lit `request.user.employee_of_organization` et rend un 500 au lieu
+    # d'un 401.
+    permission_classes = [permissions.IsAuthenticated, IsEmployeeOfAnOrganization]
+    parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request):
-        if LOCAL_RUN:
-            organization_id = ORGANIZATION_ID
-            collection = Collection.objects.filter(pk=COLLECTION_ID).first()
+        organization_id = request.user.employee_of_organization_id
+        kind = request.data.get("kind", "books")
+        if kind not in KINDS:
+            return Response(
+                {"detail": f"Type d'import inconnu : {kind}. Attendu : {', '.join(KINDS)}."},
+                status=400,
+            )
+        uploaded = request.FILES.get("file")
+        if not uploaded:
+            return Response({"detail": "Aucun fichier reçu sous le champ « file »."}, status=400)
+
+        columns, noun = KINDS[kind]
+        try:
+            records = read_rows(file=uploaded, columns=columns)
+        except ImportFileError as error:
+            return Response({"detail": str(error)}, status=400)
+
+        if kind == "books":
+            # La collection sert de rangement par défaut aux ouvrages
+            # importés ; une organisation qui n'en a pas encore importe
+            # quand même.
+            collection = Collection.objects.filter(organization_id=organization_id).first()
+            importer = BookImporter(collection=collection)
         else:
-            organization_id = request.user.employee_of_organization_id
-            if not organization_id:
-                return Response(
-                    {"detail": "Ce compte n'est rattaché à aucune organisation."},
-                    status=400,
-                )
-            collection = Collection.objects.filter(
-                organization_id=organization_id
-            ).first()
-        file = request.FILES["file"]
-        isbns = read_isbns_from_xls_file(file=file)
-        status = {"not_found": [], "duplicates": [], "success": [], "error": []}
-        for index, isbn in enumerate(isbns):
-            # Le doublon se juge dans l'organisation qui importe : le même ISBN
-            # catalogué par une autre bibliothèque ne la concerne pas.
-            book_already_in_DB = Book.objects.filter(
-                isbn=isbn, organization_id=organization_id
-            ).exists()
-            if book_already_in_DB:
-                status["duplicates"].append(isbn)
-                print(f"⚠️{index + 1}/{len(isbns)} Duplicate : {isbn}")
-            else:
-                try:
-                    book = find_book_details(isbn=isbn)
-                except Exception as e:
-                    print(f"❌{index + 1}/{len(isbns)} Lookup Error : {e}")
-                    status["error"].append(isbn)
-                else:
-                    if book:
-                        print(
-                            f"✅{index + 1}/{len(isbns)} found : {book.title} - {isbn}"
-                        )
-                        db_book = Book(
-                            organization_id=organization_id,
-                            author=book.author,
-                            title=book.title,
-                            isbn=book.isbn,
-                            publisher=book.publisher,
-                            # Todo : fix picture
-                            # picture=book.author,
-                            lang=book.language,
-                            inventory=1,
-                            published_year=book.published_year,
-                            description=book.description,
-                        )
-                        try:
-                            db_book.save()
-                        except IntegrityError:
-                            status["duplicates"].append(book.isbn)
-                            print(f"⚠️{index + 1}/{len(isbns)} Duplicate : {isbn}")
-                        except Exception as e:
-                            print(f"❌{index + 1}/{len(isbns)} Saving Error : {e}")
-                            status["error"].append(isbn)
-                        else:
-                            if collection:
-                                db_book.collections.set([collection])
-                            status["success"].append(book.isbn)
-                            print(
-                                f"✅{index + 1}/{len(isbns)} Success : {book.title} - {isbn}"
-                            )
-                        try:
-                            image = download_image(url=book.picture)
-                            if image:
-                                db_book.picture.save(
-                                    name=book.title,
-                                    content=ContentFile(image),
-                                    save=True,
-                                )
-                        except Exception as e:
-                            print(
-                                f"⚠️{index + 1}/{len(isbns)} No picture : {isbn} - {e}"
-                            )
+            importer = CustomerImporter()
 
-                    else:
-                        print(f"❌{index + 1}/{len(isbns)} Not found : {isbn}")
-                        status["not_found"].append(isbn)
-
-        status |= {
-            "not_found_count": len(status["not_found"]),
-            "duplicates_count": len(status["duplicates"]),
-            "success_count": len(status["success"]),
-            "error": len(status["error"]),
-        }
-
-        with open("import_log.json", "w") as file:
-            json.dump(status, file)
-
-        return Response(
-            {"status": status},
-            status=200,
+        report = run_import(
+            records=records, importer=importer, organization_id=organization_id
         )
-
-
-def read_isbns_from_xls_file(file) -> list:
-    reader = openpyxl.load_workbook(filename=BytesIO(file.read()), read_only=True)
-    isbns = []
-    if reader.worksheets:
-        rows = reader.worksheets[0].iter_rows(min_row=2)
-        for row in rows:
-            isbns.append(row[0].value)
-    return isbns
+        return Response({"kind": kind, "noun": noun, "status": report.as_dict()}, status=200)
