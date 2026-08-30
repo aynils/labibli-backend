@@ -19,6 +19,11 @@ XLSX_SUFFIXES = (".xlsx", ".xlsm")
 # trois workers : sans plafond, un classeur suffit à en faire tomber un.
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
+# Sentinelle : une valeur par défaut d'argument est figée à la définition de
+# la fonction. Écrire `max_bytes=MAX_UPLOAD_BYTES` dans la signature rendrait
+# la constante impossible à changer après coup, y compris pour un test.
+DEFAULT_CAP = object()
+
 # Libellés d'en-tête reconnus. Les fichiers reçus sont écrits en français —
 # celui du RFNB commence par « isbn ; titre ; auteur » — alors que les
 # colonnes internes portent des noms anglais. Sans cette table, la ligne
@@ -59,24 +64,34 @@ def looks_like_header(values, columns) -> bool:
     return recognized >= 2
 
 
-def read_rows(file, columns, delimiter=";") -> list:
+def read_rows(file, columns, delimiter=";", max_bytes=DEFAULT_CAP) -> list:
     """Rend une liste de dictionnaires, une entrée par ligne utile du fichier.
+
+    `max_bytes` borne la taille acceptée ; le passer à None lève la borne,
+    ce que fait la commande de gestion : le plafond protège le service web de
+    ses téléversements, il n'a pas à refuser un fichier local que la commande
+    existe justement pour charger.
 
     `columns` donne le nom de chaque colonne dans l'ordre du fichier. Une
     première ligne qui reprend ces noms est traitée comme un en-tête et
     sautée ; sinon elle est lue comme une donnée, parce que la moitié des
     fichiers reçus n'ont pas d'en-tête du tout.
     """
+    if max_bytes is DEFAULT_CAP:
+        max_bytes = MAX_UPLOAD_BYTES
     name = (getattr(file, "name", "") or "").lower()
-    size = getattr(file, "size", None)
-    if size and size > MAX_UPLOAD_BYTES:
-        raise ImportFileError(
-            f"Fichier trop volumineux ({size // 1024 // 1024} Mo) : "
-            f"maximum {MAX_UPLOAD_BYTES // 1024 // 1024} Mo."
-        )
-    raw = file.read(MAX_UPLOAD_BYTES + 1)
-    if len(raw) > MAX_UPLOAD_BYTES:
-        raise ImportFileError(f"Fichier trop volumineux : maximum {MAX_UPLOAD_BYTES // 1024 // 1024} Mo.")
+    if max_bytes is not None:
+        size = getattr(file, "size", None)
+        if size and size > max_bytes:
+            raise ImportFileError(
+                f"Fichier trop volumineux ({size // 1024 // 1024} Mo) : "
+                f"maximum {max_bytes // 1024 // 1024} Mo."
+            )
+        raw = file.read(max_bytes + 1)
+        if len(raw) > max_bytes:
+            raise ImportFileError(f"Fichier trop volumineux : maximum {max_bytes // 1024 // 1024} Mo.")
+    else:
+        raw = file.read()
     if name.endswith(XLSX_SUFFIXES):
         rows = read_xlsx(raw)
     else:

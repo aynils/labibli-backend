@@ -73,8 +73,12 @@ class Importer:
         raise NotImplementedError
 
 
-def run_import(records, importer, organization_id) -> ImportReport:
+def run_import(records, importer, organization_id, on_progress=None) -> ImportReport:
     """Joue l'import et rend le compte rendu.
+
+    `on_progress` est appelé après chaque ligne avec son rang, le total et
+    le sort qui lui a été réservé. Un import de collection entière dure plus
+    d'une heure : sans ça, il est aveugle jusqu'à la dernière ligne.
 
     Le dédoublonnage regarde deux choses : ce que l'organisation possède
     déjà, et ce que le fichier lui-même contient en double — un inventaire
@@ -87,21 +91,38 @@ def run_import(records, importer, organization_id) -> ImportReport:
 
     report = ImportReport()
     seen = set(importer.existing_keys(organization_id))
+    total = len(records)
 
-    for record in records:
+    def announce(index, name, outcome):
+        if not on_progress:
+            return
+        try:
+            on_progress(index=index, total=total, label=name, outcome=outcome)
+        except Exception:
+            # L'affichage ne doit jamais coûter l'import : une console qui
+            # refuse un caractère ou une sortie redirigée ferait perdre une
+            # heure de travail et le compte rendu avec, en laissant des
+            # lignes déjà écrites en base.
+            pass
+
+    for index, record in enumerate(records, 1):
         name = importer.label(record)
         keys = [key for key in importer.dedupe_keys(record) if key]
         if any(key in seen for key in keys):
             report.duplicates.append(name)
+            announce(index, name, "duplicate")
             continue
         try:
             created = importer.build(record, organization_id)
         except Exception as error:
             report.errors.append({"line": name, "reason": str(error)})
+            announce(index, name, "error")
             continue
         if created is None:
             report.not_found.append(name)
+            announce(index, name, "not_found")
             continue
         seen.update(keys)
         report.created.append(name)
+        announce(index, name, "created")
     return report

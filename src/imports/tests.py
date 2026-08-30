@@ -103,6 +103,19 @@ class ReadRowsTests(SimpleTestCase):
         with self.assertRaises(ImportFileError):
             read_rows(FluxSansTaille(), columns=BOOK_COLUMNS)
 
+    def test_accepte_un_gros_fichier_quand_le_plafond_est_leve(self):
+        """La commande de gestion lève le plafond, et ça doit tenir.
+
+        Le plafond protège le service web de ses téléversements ; la commande
+        existe justement pour charger un fichier local que ce plafond
+        refuserait. Sans ce test, le rétablir en douce ne casserait rien.
+        """
+        lignes = b"9782764813447;Kukum;Michel Jean;Libre Expression\n"
+        gros = SimpleUploadedFile("gros.csv", lignes * (MAX_UPLOAD_BYTES // len(lignes) + 10))
+        rows = read_rows(gros, columns=BOOK_COLUMNS, max_bytes=None)
+        self.assertGreater(len(rows), 0)
+        self.assertEqual(rows[0]["title"], "Kukum")
+
     def test_lit_un_csv_quel_que_soit_son_encodage(self):
         latin = SimpleUploadedFile("m.csv", "Josette;COUTURÉ;j@example.com;613\n".encode("latin-1"))
         rows = read_rows(latin, columns=CUSTOMER_COLUMNS)
@@ -176,3 +189,49 @@ class RunImportTests(SimpleTestCase):
         report = ImportReport(errors=[{"line": "a", "reason": "b"}])
         self.assertEqual(report.as_dict()["errors"], [{"line": "a", "reason": "b"}])
         self.assertEqual(report.as_dict()["errors_count"], 1)
+
+
+class ProgressTests(SimpleTestCase):
+    """Le suivi de progression, sans lequel un import d'une heure est aveugle."""
+
+    def records(self, *names):
+        return [{"name": name} for name in names]
+
+    def test_annonce_chaque_ligne_avec_son_sort(self):
+        vus = []
+        run_import(
+            self.records("neuve", "déjà", "introuvable", "cassée"),
+            FakeImporter(existing={"déjà"}, refuse={"introuvable"}, explose={"cassée"}),
+            7,
+            on_progress=lambda index, total, label, outcome: vus.append((index, label, outcome)),
+        )
+        self.assertEqual(vus, [
+            (1, "neuve", "created"),
+            (2, "déjà", "duplicate"),
+            (3, "introuvable", "not_found"),
+            (4, "cassée", "error"),
+        ])
+
+    def test_annonce_le_total_des_le_depart(self):
+        totaux = []
+        run_import(
+            self.records("une", "deux", "trois"), FakeImporter(), 7,
+            on_progress=lambda index, total, label, outcome: totaux.append(total),
+        )
+        self.assertEqual(totaux, [3, 3, 3])
+
+    def test_un_affichage_qui_echoue_ne_coute_pas_l_import(self):
+        """Le défaut le plus cher possible ici.
+
+        Une console qui refuse un caractère ferait perdre une heure d'import
+        ET son compte rendu, en laissant des lignes déjà écrites en base.
+        """
+        def casse(index, total, label, outcome):
+            raise UnicodeEncodeError("ascii", "✅", 0, 1, "console rétive")
+
+        report = run_import(self.records("une", "deux"), FakeImporter(), 7, on_progress=casse)
+        self.assertEqual(report.as_dict()["created_count"], 2)
+
+    def test_fonctionne_sans_suivi(self):
+        report = run_import(self.records("une"), FakeImporter(), 7)
+        self.assertEqual(report.as_dict()["created_count"], 1)
