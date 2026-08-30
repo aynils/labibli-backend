@@ -10,10 +10,13 @@ DJANGO_ENV = "DEV"
 ALLOWED_HOSTS = ["localhost", "432f-134-41-73-182.ngrok.io"]
 FRONTEND_URL = "http://localhost:3000"
 
-# CORS_ALLOWED_ORIGINS = [
-#     FRONTEND_URL,
-#     '*'
-# ]
+# base.py n'autorise que le port 3000, occupé sur ce poste par le conteneur
+# Metabase de Cocitools. Le front de développement tourne donc sur 3001, et sans
+# cette ligne le navigateur bloque toutes les réponses de l'API.
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+]
 
 
 DATABASES = {
