@@ -60,7 +60,14 @@ DEBUG_TOOLBAR_CONFIG = {
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # Store images on Digital Ocean S3
-DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+# ⚠️ DEFAULT_FILE_STORAGE a été SUPPRIMÉ par Django 5.1 au profit de STORAGES.
+# Le réglage était ignoré en silence : le stockage retombait sur le disque local et
+# les couvertures pointaient vers /media/, où rien n'existe. production.py utilise
+# déjà la forme moderne, c'est ce fichier-ci qui était resté en arrière.
+STORAGES = {
+    "default": {"BACKEND": "storages.backends.s3boto3.S3Boto3Storage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 AWS_S3_REGION_NAME = "sfo3"
 AWS_S3_ENDPOINT_URL = f"https://{AWS_S3_REGION_NAME}.digitaloceanspaces.com"
 AWS_ACCESS_KEY_ID = "BGLZPAXQMT7H2HGFREQI"
