@@ -35,6 +35,17 @@ class ImportReport:
         }
 
 
+class AlreadyPresent(Exception):
+    """La ligne désigne un ouvrage que l'organisation possède déjà.
+
+    Elle n'est levée qu'APRÈS la résolution : le fichier ne portait pas
+    d'ISBN, on en a retrouvé un, et c'est lui qui révèle le doublon. Avant
+    le 31/08/2026 ces lignes partaient en `IntegrityError` — dix-neuf pavés
+    d'erreur Postgres dans le compte rendu d'une bibliothèque qui renvoyait
+    simplement son fichier après y avoir ajouté vingt titres.
+    """
+
+
 class Importer:
     """Ce qu'un import doit savoir faire de ses propres lignes.
 
@@ -68,9 +79,21 @@ class Importer:
         """Rend l'objet à enregistrer, ou None si la ligne reste introuvable.
 
         L'implémentation DOIT poser `organization_id` elle-même : rien de ce
-        que produit un import ne doit exister hors d'une organisation.
+        que produit un import ne doit exister hors d'une organisation. Elle
+        lève `AlreadyPresent` si la résolution révèle un doublon que les clés
+        de la ligne ne montraient pas.
         """
         raise NotImplementedError
+
+    def created_keys(self, created) -> list:
+        """Les clés de l'objet RÉELLEMENT écrit.
+
+        Elles peuvent différer de celles de la ligne : un ISBN retrouvé pour
+        deux titres du même auteur ferait entrer le second en collision avec
+        le premier, dans le même fichier. Par défaut, rien de plus que les
+        clés de la ligne.
+        """
+        return []
 
 
 def run_import(records, importer, organization_id, on_progress=None) -> ImportReport:
@@ -114,6 +137,12 @@ def run_import(records, importer, organization_id, on_progress=None) -> ImportRe
             continue
         try:
             created = importer.build(record, organization_id)
+        except AlreadyPresent:
+            # Le doublon n'apparaît qu'une fois l'ISBN retrouvé : c'est un
+            # doublon, pas une erreur, et le compte rendu doit le dire.
+            report.duplicates.append(name)
+            announce(index, name, "duplicate")
+            continue
         except Exception as error:
             report.errors.append({"line": name, "reason": str(error)})
             announce(index, name, "error")
@@ -123,6 +152,7 @@ def run_import(records, importer, organization_id, on_progress=None) -> ImportRe
             announce(index, name, "not_found")
             continue
         seen.update(keys)
+        seen.update(key for key in importer.created_keys(created) if key)
         report.created.append(name)
         announce(index, name, "created")
     return report

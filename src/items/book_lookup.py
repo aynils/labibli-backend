@@ -14,7 +14,9 @@ from src.helpers.text_matching import (
     same_volume,
     shares_surname,
     significant_words,
+    surname_candidates,
     title_similarity,
+    volume_number,
 )
 
 GOOGLE_URL = "https://www.googleapis.com/books/v1/volumes"
@@ -303,8 +305,46 @@ def get_wikipedia_fr_summary(title: str, author: str) -> str:
     """
     if not title:
         return None
-    author_words = significant_words(author)
-    for article in search_wikipedia_fr_articles(title=title, author=author):
+    # Sans nom d'auteur, rien ne peut prouver que l'article parle du bon
+    # ouvrage : on s'abstient AVANT de sortir sur le réseau. Le contrôle
+    # existait, mais après jusqu'à huit requêtes séquentielles.
+    surnames = set(surname_candidates(author))
+    if not surnames:
+        return None
+    # Le titre et l'auteur viennent d'une notice de catalogue, qui écrit
+    # « La servante écarlate : roman » et « Atwood, Margaret ». Wikipédia ne
+    # trouve RIEN sur ces formes — le nettoyage était déjà fait pour les
+    # couvertures (get_cover_by_title) et jamais pour les résumés. Sur la
+    # médiathèque de démonstration du 31/08/2026, la moitié des fiches
+    # ressortaient sans résumé pour cette seule raison ; « La servante
+    # écarlate » nue trouve son article du premier coup.
+    query_title = TITLE_NOISE.sub("", title).strip() or title
+    query_author = (author or "").split(",")[0].strip() or author
+    # La vérification, elle, garde l'auteur COMPLET : c'est elle qui prouve
+    # que l'article parle du bon ouvrage, et l'affaiblir ferait entrer des
+    # résumés faux.
+    # Deux essais : le titre nettoyé, puis sa partie avant le deux-points.
+    # « Maus : un survivant raconte » ne trouve rien, « Maus » trouve
+    # l'article — TITLE_NOISE ne retire que les mentions d'édition, pas les
+    # vrais sous-titres.
+    #
+    # ⛔ Le repli est REFUSÉ dès que le titre porte un numéro de tome. Sans ça
+    # il rouvre par une autre porte le défaut que `same_volume` a fermé le
+    # 31/08 : « Vernon Subutex : tome 2 » ne trouve rien sous son titre
+    # complet, le tronqué trouve l'article de la SÉRIE, et les trois tomes
+    # reçoivent le même résumé. C'est précisément quand le titre complet
+    # échoue — donc sur les séries et les intégrales — que le repli est seul
+    # en lice : il faut le tenir là, pas ailleurs.
+    essais = [query_title]
+    tronque = query_title.split(":")[0].strip()
+    if tronque and tronque != query_title and volume_number(title) is None:
+        essais.append(tronque)
+    articles = []
+    for essai in essais:
+        for article in search_wikipedia_fr_articles(title=essai, author=query_author):
+            if article not in articles:
+                articles.append(article)
+    for article in articles:
         try:
             response = requests.get(
                 url=f"{WIKIPEDIA_FR_SUMMARY}{quote(article, safe='')}",
@@ -323,10 +363,18 @@ def get_wikipedia_fr_summary(title: str, author: str) -> str:
         extract = (page.get("extract") or "").strip()
         if not extract:
             continue
-        # Sans auteur connu, on ne peut rien prouver : on s'abstient.
-        if not author_words:
-            return None
-        if author_words & significant_words(extract):
+        # Le titre de l'article ne doit pas contredire le tome demandé.
+        # « Vernon Subutex » est l'article de la SÉRIE : lui donner le résumé
+        # du tome 2 met le même texte sur trois fiches distinctes. C'est le
+        # contrôle que `same_volume` porte déjà pour l'ISBN et la couverture.
+        if not same_volume(title, article):
+            continue
+        # 🔴 Le NOM DE FAMILLE doit apparaître dans l'extrait, pas un mot
+        # quelconque de la mention d'auteur. L'ancienne intersection acceptait
+        # « Ce roman de Margaret Laurence… » pour « Atwood, Margaret » : le
+        # prénom suffisait. C'est la même leçon que `shares_surname`, écrite
+        # pour les couvertures et jamais appliquée ici.
+        if surnames & significant_words(extract):
             return extract
     return None
 
@@ -371,30 +419,58 @@ def get_cover_by_title(title: str, author: str) -> str:
             and same_volume(title, candidate_title)
         )
 
-    response = get_with_retry(
-        OPEN_LIBRARY_SEARCH_URL,
-        {"title": query_title, "author": query_author, "limit": 3,
-         "fields": "cover_i,title,author_name"},
-    )
-    if response is not None and response.status_code == 200:
+    def open_library(language):
+        params = {"title": query_title, "author": query_author, "limit": 3,
+                  "fields": "cover_i,title,author_name"}
+        if language:
+            params["language"] = language
+        response = get_with_retry(OPEN_LIBRARY_SEARCH_URL, params)
+        if response is None or response.status_code != 200:
+            return None
         for doc in response.json().get("docs", []):
             if doc.get("cover_i") and convient(doc.get("title", ""), ", ".join(doc.get("author_name", []))):
                 return f"https://covers.openlibrary.org/b/id/{doc['cover_i']}-L.jpg"
+        return None
 
-    params = {
-        "q": f'intitle:"{query_title}" inauthor:"{query_author}"',
-        "fields": "items/volumeInfo(title,authors,imageLinks)",
-        "maxResults": 3,
-    }
-    if GOOGLE_BOOKS_API_KEY:
-        params["key"] = GOOGLE_BOOKS_API_KEY
-    response = get_with_retry(GOOGLE_URL, params)
-    if response is not None and response.status_code == 200:
+    def google(language):
+        params = {
+            "q": f'intitle:"{query_title}" inauthor:"{query_author}"',
+            "fields": "items/volumeInfo(title,authors,imageLinks)",
+            "maxResults": 3,
+        }
+        if language:
+            params["langRestrict"] = language
+        if GOOGLE_BOOKS_API_KEY:
+            params["key"] = GOOGLE_BOOKS_API_KEY
+        response = get_with_retry(GOOGLE_URL, params)
+        if response is None or response.status_code != 200:
+            return None
         for item in response.json().get("items", []):
             volume = item.get("volumeInfo", {})
             thumbnail = (volume.get("imageLinks") or {}).get("thumbnail")
             if thumbnail and convient(volume.get("title", ""), ", ".join(volume.get("authors", []))):
                 return thumbnail
+        return None
+
+    # 🔴 L'édition FRANÇAISE d'abord, et de loin. Sans ce filtre, OpenLibrary
+    # rend l'édition la mieux référencée, qui est anglaise pour la plupart des
+    # œuvres connues : la médiathèque de démonstration affichait « Asterix The
+    # Gaul », « Round the Moon », « The Second Sex » et « Der kleine Prinz »
+    # sur des fiches françaises, le 31/08/2026. Sur une vitrine de
+    # bibliothèque francophone, une jaquette dans une autre langue passe pour
+    # une erreur de catalogage — ce qu'elle est.
+    #
+    # Le repli sans filtre reste : un ouvrage jamais traduit n'a pas d'édition
+    # française, et montrer sa jaquette d'origine vaut mieux qu'un rectangle
+    # vide. L'ordre est ce qui compte.
+    for language in ("fre", None):
+        found = open_library(language)
+        if found:
+            return found
+    for language in ("fr", None):
+        found = google(language)
+        if found:
+            return found
     return None
 
 

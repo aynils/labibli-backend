@@ -22,6 +22,10 @@ from src.items.models import Book, Collection
 
 LOOKUP = "src.items.book_import.find_book_details"
 RESOLVE = "src.items.book_import.find_isbn"
+# Voir `sans_reseau` dans tests.py : ces deux recours par titre sortent sur le
+# réseau sans passer par `find_book_details`.
+SUMMARY_BY_TITLE = "src.items.book_import.get_wikipedia_fr_summary"
+COVER_BY_TITLE = "src.items.book_import.get_cover_by_title"
 
 
 def xlsx_path(rows, directory):
@@ -50,6 +54,12 @@ def make_user(email):
 @patch(LOOKUP, return_value=None)
 class ImportFileCommandTests(TestCase):
     def setUp(self):
+        # Les recours par titre sortent sur le réseau sans passer par
+        # `find_book_details` : sans ça, la suite dépend de Wikipédia.
+        for cible in (SUMMARY_BY_TITLE, COVER_BY_TITLE):
+            patcher = patch(cible, return_value=None)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.premier, self.premiere_organisation = make_user("premier@test.com")
         # La seconde organisation est créée APRÈS : une lecture non cloisonnée
         # tomberait sur la première, et les tests passeraient quand même.

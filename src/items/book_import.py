@@ -21,8 +21,13 @@ Trois principes en découlent :
 from django.core.files.base import ContentFile
 from django.db import transaction
 
-from src.imports.runner import Importer
-from src.items.book_lookup import download_image, find_book_details
+from src.imports.runner import AlreadyPresent, Importer
+from src.items.book_lookup import (
+    download_image,
+    find_book_details,
+    get_cover_by_title,
+    get_wikipedia_fr_summary,
+)
 from src.items.isbn_resolution import find_isbn, normalize
 from src.items.models import Book, Category
 
@@ -122,6 +127,17 @@ class BookImporter(Importer):
         if not title:
             return None
 
+        # L'ISBN retrouvé peut révéler un doublon que la ligne ne montrait
+        # pas : le fichier n'en portait aucun, la fiche en base en porte un.
+        # Sans ce contrôle, l'écriture partait sur la contrainte d'unicité
+        # (isbn, organization, title) et la bibliothèque recevait le texte
+        # brut de l'erreur Postgres. 🔴 Le filtre porte l'organisation : sans
+        # elle, on refuserait un titre catalogué par une autre bibliothèque.
+        if isbn and not record.get("isbn") and Book.objects.filter(
+            organization_id=organization_id, isbn=isbn, title=title
+        ).exists():
+            raise AlreadyPresent(title)
+
         book = Book(
             organization_id=organization_id,
             title=title,
@@ -134,7 +150,11 @@ class BookImporter(Importer):
             publisher=record.get("publisher") or (details.publisher if details else None),
             published_year=record.get("published_year") or (details.published_year if details else None),
             lang=record.get("lang") or (details.language if details else None),
-            description=record.get("description") or (details.description if details else None),
+            description=(
+                record.get("description")
+                or (details.description if details else None)
+                or self.summary_by_title(title, record.get("author"))
+            ),
             inventory=1,
         )
         book.save()
@@ -142,8 +162,48 @@ class BookImporter(Importer):
         if self.collection:
             book.collections.set([self.collection])
         self.attach_category(book, record.get("category"), organization_id)
-        self.attach_cover(book, record.get("cover_url"), details)
+        self.attach_cover(book, record.get("cover_url"), details, title, record.get("author"))
         return book
+
+    def summary_by_title(self, title, author):
+        """Le résumé retrouvé à partir du TITRE DU FICHIER, en dernier recours.
+
+        `find_book_details` abandonne tout — couverture comprise — dès qu'aucun
+        catalogue interrogé par ISBN ne rend de notice. Or Wikipédia et la
+        recherche par titre n'ont pas besoin d'ISBN du tout : sur la
+        médiathèque de démonstration du 31/08/2026, quota Google épuisé,
+        « Le petit prince » et « Maus » ressortaient nus alors que leur
+        article existe et que la fonction le trouve en une requête.
+
+        C'est aussi le titre du FICHIER qui est utilisé, pas celui de la
+        notice : la bibliothèque écrit « La servante écarlate », le catalogue
+        écrit « La servante écarlate : roman », et seul le premier trouve.
+        """
+        if not self.enrich:
+            return None
+        try:
+            return get_wikipedia_fr_summary(title=title, author=author or "")
+        except Exception:
+            return None
+
+    def cover_by_title(self, title, author):
+        """Même raison que `summary_by_title`, pour la couverture."""
+        if not self.enrich or not title or not author:
+            return None
+        try:
+            return get_cover_by_title(title=title, author=author)
+        except Exception:
+            return None
+
+    def created_keys(self, created) -> list:
+        """Les clés de l'ouvrage écrit, ISBN retrouvé compris.
+
+        Deux titres du même auteur peuvent se voir attribuer le MÊME ISBN par
+        la résolution — « Astérix le Gaulois » et « Le petit Nicolas » chez
+        Goscinny. Sans ces clés, le second entrait en collision avec le
+        premier à l'intérieur d'un seul fichier.
+        """
+        return dedupe_keys(created.isbn, created.title, created.author, created.publisher)
 
     def resolve(self, record):
         """Retrouve l'ISBN par le titre et l'auteur, si on nous y autorise."""
@@ -194,8 +254,12 @@ class BookImporter(Importer):
             self.categories[(organization_id, name)] = cached
         book.categories.add(cached)
 
-    def attach_cover(self, book, cover_url, details):
-        url = cover_url or (details.picture if details else None)
+    def attach_cover(self, book, cover_url, details, title=None, author=None):
+        url = (
+            cover_url
+            or (details.picture if details else None)
+            or self.cover_by_title(title or book.title, author or book.author)
+        )
         if not url:
             return
         try:

@@ -15,6 +15,19 @@ from src.items.models import Book, Category, Collection
 
 LOOKUP = "src.items.book_import.find_book_details"
 RESOLVE = "src.items.book_import.find_isbn"
+# Les deux recours par titre partent sur le réseau sans passer par
+# `find_book_details` : sans les neutraliser, la suite passe de 0,2 s à 39 s
+# et devient dépendante de Wikipédia et d'OpenLibrary.
+SUMMARY_BY_TITLE = "src.items.book_import.get_wikipedia_fr_summary"
+COVER_BY_TITLE = "src.items.book_import.get_cover_by_title"
+
+
+def sans_reseau(test):
+    """Coupe les recours par titre pour la durée du test."""
+    for cible in (SUMMARY_BY_TITLE, COVER_BY_TITLE):
+        patcher = patch(cible, return_value=None)
+        patcher.start()
+        test.addCleanup(patcher.stop)
 
 
 def xlsx_upload(rows, name="import.xlsx"):
@@ -57,6 +70,7 @@ def second_user_with_organization():
 
 class ImportBooksTests(APITestCase):
     def setUp(self):
+        sans_reseau(self)
         self.user = create_user()
         self.organization = Organization.objects.get(owner=self.user)
         self.url = reverse("import_file")
@@ -112,6 +126,146 @@ class ImportBooksTests(APITestCase):
         # laissait la suite verte.
         lookup.assert_called_once_with(isbn="9782764813447")
         self.assertEqual(Book.objects.get(organization=self.organization).isbn, "9782764813447")
+
+    @patch(RESOLVE, return_value=None)
+    @patch(LOOKUP, return_value=book_details())
+    def test_lit_les_colonnes_dans_l_ordre_de_l_entete(self, lookup, resolve):
+        """Un en-tête qui nomme ses colonnes fait foi, quel que soit leur ordre.
+
+        Avant le 31/08/2026 l'en-tête n'était que sauté et les colonnes
+        lues dans l'ordre interne : un fichier commençant par « Titre »
+        chargeait le titre dans l'ISBN et l'auteur dans le titre. Aucune
+        erreur, aucun journal — trente-deux fiches fausses en production, et
+        le défaut ne se voit qu'en regardant la vitrine.
+        """
+        response = self.client.post(
+            self.url,
+            {"file": xlsx_upload([
+                ("Titre", "Auteur", "Catégorie"),
+                ("Kukum", "Michel Jean", "Romans"),
+            ])},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        book = Book.objects.get(organization=self.organization)
+        self.assertEqual(book.title, "Kukum")
+        self.assertEqual(book.author, "Michel Jean")
+        # La colonne que l'en-tête ne nomme pas reste vide : mieux vaut un
+        # champ absent qu'un champ rempli avec le contenu du voisin.
+        self.assertFalse(book.isbn)
+        self.assertEqual([c.name for c in book.categories.all()], ["Romans"])
+
+    @patch(RESOLVE, return_value=None)
+    @patch(LOOKUP, return_value=None)
+    def test_trouve_resume_et_couverture_sans_aucune_notice(self, lookup, resolve):
+        """Aucun catalogue ne répond : Wikipédia et OpenLibrary restent joignables.
+
+        `find_book_details` abandonne TOUT dès qu'aucune notice ne sort d'un
+        catalogue interrogé par ISBN — couverture comprise. Or la recherche
+        par titre n'a pas besoin d'ISBN. Le 31/08/2026, quota Google épuisé,
+        « Le petit prince » et « Maus » entraient nus dans la médiathèque de
+        démonstration alors que leur article existe.
+
+        Et c'est le titre DU FICHIER qui sert : la bibliothèque écrit « La
+        servante écarlate », le catalogue « La servante écarlate : roman », et
+        seul le premier trouve quoi que ce soit.
+        """
+        with patch(SUMMARY_BY_TITLE, return_value="Un roman dystopique.") as resume, \
+                patch(COVER_BY_TITLE, return_value=None) as couverture:
+            self.client.post(
+                self.url,
+                {"file": xlsx_upload([(None, "La servante écarlate", "Margaret Atwood")])},
+                format="multipart",
+            )
+        book = Book.objects.get(organization=self.organization)
+        self.assertEqual(book.description, "Un roman dystopique.")
+        resume.assert_called_once_with(title="La servante écarlate", author="Margaret Atwood")
+        couverture.assert_called_once_with(title="La servante écarlate", author="Margaret Atwood")
+
+    @patch(RESOLVE, return_value=None)
+    @patch(LOOKUP, return_value=book_details())
+    def test_ne_cherche_pas_par_titre_quand_la_notice_suffit(self, lookup, resolve):
+        """Le recours coûte une requête réseau : il ne part que s'il manque."""
+        with patch(SUMMARY_BY_TITLE) as resume:
+            self.client.post(
+                self.url,
+                {"file": xlsx_upload([("9782764813447", "Kukum", "Michel Jean")])},
+                format="multipart",
+            )
+        resume.assert_not_called()
+
+    @patch(LOOKUP, return_value=book_details())
+    def test_un_isbn_retrouve_sur_un_ouvrage_deja_present_est_un_doublon(self, lookup):
+        """Renvoyer son fichier ne doit pas produire un mur d'erreurs Postgres.
+
+        Le fichier ne porte pas d'ISBN ; la fiche en base en porte un, posé
+        par la résolution au premier passage. Les clés de la ligne ne se
+        reconnaissent donc pas, et l'écriture partait sur la contrainte
+        d'unicité (isbn, organization, title) : dix-neuf pavés d'erreur
+        Postgres dans le compte rendu du 31/08/2026, là où « doublon » est
+        la bonne réponse. C'est le geste le plus banal d'une bibliothèque —
+        « j'ai ajouté vingt titres, je renvoie le fichier ».
+        """
+        # L'éditeur est la clé du défaut : la fiche en base le porte, posé
+        # par le catalogue au premier passage, et le fichier ne l'a jamais eu.
+        # La clé de repli (titre|auteur|éditeur) ne se reconnaît donc PAS, et
+        # sans l'ISBN retrouvé rien n'arrête l'écriture avant la contrainte.
+        Book.objects.create(
+            organization=self.organization, title="Kukum",
+            author="Michel Jean", isbn="9782764813447",
+            publisher="Libre Expression",
+        )
+        with patch(RESOLVE) as resolve:
+            resolve.return_value = type("Match", (), {"isbn": "9782764813447"})()
+            response = self.client.post(
+                self.url,
+                {"file": xlsx_upload([(None, "Kukum", "Michel Jean")])},
+                format="multipart",
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"]["duplicates_count"], 1)
+        self.assertEqual(response.data["status"]["errors"], [])
+        self.assertEqual(Book.objects.filter(organization=self.organization).count(), 1)
+
+    @patch(LOOKUP, return_value=book_details())
+    def test_un_isbn_deja_present_ailleurs_ne_bloque_pas_l_import(self, lookup):
+        """🔴 Le contrôle porte l'organisation, sinon il rejette le voisin.
+
+        Une autre bibliothèque a catalogué le même titre sous le même ISBN.
+        Le nôtre doit entrer : c'est exactement la panne payée le 30/08, où
+        un titre déjà connu ailleurs était refusé en silence.
+        """
+        voisine_user, voisine = second_user_with_organization()
+        Book.objects.create(
+            organization=voisine, title="Kukum",
+            author="Michel Jean", isbn="9782764813447",
+        )
+        with patch(RESOLVE) as resolve:
+            resolve.return_value = type("Match", (), {"isbn": "9782764813447"})()
+            self.client.post(
+                self.url,
+                {"file": xlsx_upload([(None, "Kukum", "Michel Jean")])},
+                format="multipart",
+            )
+        self.assertEqual(Book.objects.filter(organization=self.organization).count(), 1)
+        self.assertEqual(Book.objects.filter(organization=voisine).count(), 1)
+
+    @patch(LOOKUP, return_value=book_details())
+    def test_lit_un_fichier_sans_entete_dans_l_ordre_interne(self, lookup):
+        """Sans en-tête, l'ordre des colonnes internes reste la seule règle.
+
+        La moitié des fichiers reçus n'ont pas d'en-tête — celui des membres
+        de l'Alliance Française n'en a pas. La correction de l'en-tête ne
+        doit pas leur retirer leur mode de lecture.
+        """
+        self.client.post(
+            self.url,
+            {"file": xlsx_upload([("9782764813447", "Kukum", "Michel Jean")])},
+            format="multipart",
+        )
+        book = Book.objects.get(organization=self.organization)
+        self.assertEqual(book.isbn, "9782764813447")
+        self.assertEqual(book.title, "Kukum")
 
     @patch(LOOKUP, return_value=book_details())
     def test_le_fichier_prime_sur_le_catalogue(self, lookup):

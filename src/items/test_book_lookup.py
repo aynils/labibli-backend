@@ -136,6 +136,85 @@ class WikipediaSummaryTests(SimpleTestCase):
     def test_sans_titre_il_n_y_a_rien_a_chercher(self):
         self.assertIsNone(get_wikipedia_fr_summary(title="", author="Michel Jean"))
 
+    def test_cherche_le_titre_NETTOYE_de_sa_mention_d_edition(self):
+        """Ce qui est CHERCHÉ compte autant que ce qui est retenu.
+
+        Le titre vient d'une notice de catalogue : « La servante écarlate :
+        roman » ne trouve aucun article, « La servante écarlate » le trouve du
+        premier coup. Le nettoyage existait pour les couvertures et pas ici :
+        la moitié des fiches de la médiathèque de démonstration ressortaient
+        sans résumé pour cette seule raison, le 31/08/2026.
+
+        Sans assertion sur l'argument de recherche, on peut chercher
+        n'importe quoi et la suite reste verte.
+        """
+        extract = "La Servante écarlate est un roman de Margaret Atwood."
+        with patch.object(book_lookup, "search_wikipedia_fr_articles",
+                          return_value=["La Servante écarlate"]) as cherche, \
+             patch.object(book_lookup.requests, "get", return_value=self.summary(extract=extract)):
+            result = get_wikipedia_fr_summary(title="La servante écarlate : roman",
+                                              author="Atwood, Margaret")
+        self.assertEqual(result, extract)
+        self.assertEqual(cherche.call_args_list[0].kwargs["title"], "La servante écarlate")
+        # L'auteur cherché est tronqué au nom de famille — « Atwood, Margaret »
+        # ne rend rien tel quel.
+        self.assertEqual(cherche.call_args_list[0].kwargs["author"], "Atwood")
+
+    def test_replie_sur_la_partie_avant_le_deux_points(self):
+        """« Maus : un survivant raconte » ne trouve rien, « Maus » trouve."""
+        extract = "Maus est un roman graphique d'Art Spiegelman."
+        with patch.object(book_lookup, "search_wikipedia_fr_articles",
+                          side_effect=[[], ["Maus"]]) as cherche, \
+             patch.object(book_lookup.requests, "get", return_value=self.summary(extract=extract)):
+            result = get_wikipedia_fr_summary(title="Maus : un survivant raconte",
+                                              author="Spiegelman, Art")
+        self.assertEqual(result, extract)
+        self.assertEqual([appel.kwargs["title"] for appel in cherche.call_args_list],
+                         ["Maus : un survivant raconte", "Maus"])
+
+    def test_ne_replie_jamais_sur_le_titre_d_une_serie(self):
+        """⛔ Le repli rouvrait le défaut que `same_volume` a fermé.
+
+        « Vernon Subutex : tome 2 » ne trouve rien sous son titre complet ;
+        tronqué, il trouve l'article de la SÉRIE, et les trois tomes
+        recevraient le même résumé. C'est exactement quand le titre complet
+        échoue que le repli est seul en lice : il doit être refusé là.
+        """
+        with patch.object(book_lookup, "search_wikipedia_fr_articles",
+                          return_value=["Vernon Subutex"]) as cherche, \
+             patch.object(book_lookup.requests, "get", return_value=self.summary(
+                 extract="Vernon Subutex est une trilogie de Virginie Despentes.")):
+            result = get_wikipedia_fr_summary(title="Vernon Subutex : tome 2",
+                                              author="Despentes, Virginie")
+        self.assertIsNone(result)
+        # Un seul essai : le tronqué n'est même pas construit.
+        self.assertEqual(len(cherche.call_args_list), 1)
+
+    def test_un_prenom_partage_ne_prouve_pas_l_auteur(self):
+        """🔴 « Margaret Laurence » n'est pas « Margaret Atwood ».
+
+        Le contrôle portait sur une intersection de mots quelconques : le
+        prénom suffisait. C'est la leçon de `shares_surname`, écrite pour les
+        couvertures et jamais appliquée aux résumés.
+        """
+        with patch.object(book_lookup, "search_wikipedia_fr_articles", return_value=["Un roman"]), \
+             patch.object(book_lookup.requests, "get", return_value=self.summary(
+                 extract="Ce roman de Margaret Laurence paraît en 1964.")):
+            result = get_wikipedia_fr_summary(title="Le cycle des géants", author="Atwood, Margaret")
+        self.assertIsNone(result)
+
+    def test_ne_sort_pas_sur_le_reseau_sans_auteur(self):
+        """Le contrôle d'auteur passe AVANT les requêtes, pas après.
+
+        Sans lui, un ouvrage sans auteur coûtait jusqu'à deux recherches et
+        six récupérations, à cinq secondes chacune, pour jeter le résultat.
+        """
+        with patch.object(book_lookup, "search_wikipedia_fr_articles") as cherche, \
+             patch.object(book_lookup.requests, "get") as recupere:
+            self.assertIsNone(get_wikipedia_fr_summary(title="Un titre", author=""))
+        cherche.assert_not_called()
+        recupere.assert_not_called()
+
 
 class FindBookDetailsTests(SimpleTestCase):
     def test_complete_un_resume_manquant_par_wikipedia(self):
