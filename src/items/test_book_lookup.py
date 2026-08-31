@@ -60,6 +60,19 @@ class RetryTests(SimpleTestCase):
         self.assertEqual(result.status_code, 429)
         self.assertEqual(get.call_count, 1)
 
+    def test_annonce_un_quota_epuise(self):
+        """Un quota épuisé ne doit pas être silencieux.
+
+        Sur un import de collection entière, tout ce qui suit revient vide :
+        sans trace, la fin du fichier se dégrade sans que rien ne l'annonce.
+        C'est la classe de panne du 18/08.
+        """
+        with patch.object(book_lookup.requests, "get", return_value=response(429)), \
+             self.assertLogs("src.items.book_lookup", level="WARNING") as journal:
+            result = get_with_retry("https://exemple.test")
+        self.assertEqual(result.status_code, 429)
+        self.assertIn("Quota", journal.output[0])
+
     def test_ne_reessaie_pas_une_reponse_definitive(self):
         """Un 404 est une réponse : insister ne changerait rien."""
         with patch.object(book_lookup.requests, "get", return_value=response(404)) as get:
@@ -125,6 +138,7 @@ class FindBookDetailsTests(SimpleTestCase):
         book = {"title": "Kukum", "author": "Michel Jean", "description": None}
         with patch.object(book_lookup, "get_book_information", return_value=book), \
              patch.object(book_lookup, "get_cover", return_value=None), \
+             patch.object(book_lookup, "get_cover_by_title", return_value=None), \
              patch.object(book_lookup, "get_wikipedia_fr_summary", return_value="Un résumé.") as wikipedia:
             details = book_lookup.find_book_details(isbn="9782764813447")
         self.assertEqual(details.description, "Un résumé.")
@@ -134,6 +148,7 @@ class FindBookDetailsTests(SimpleTestCase):
         book = {"title": "Kukum", "author": "Michel Jean", "description": "Le résumé du catalogue."}
         with patch.object(book_lookup, "get_book_information", return_value=book), \
              patch.object(book_lookup, "get_cover", return_value=None), \
+             patch.object(book_lookup, "get_cover_by_title", return_value=None), \
              patch.object(book_lookup, "get_wikipedia_fr_summary") as wikipedia:
             details = book_lookup.find_book_details(isbn="9782764813447")
         self.assertEqual(details.description, "Le résumé du catalogue.")
@@ -375,6 +390,53 @@ class CoverByTitleTests(SimpleTestCase):
             url = get_cover_by_title(title="Vipère au poing", author="Hervé Bazin")
         self.assertIsNone(url)
 
+    def test_refuse_un_autre_titre_du_meme_auteur(self):
+        """Ce cas est tenu par le SEUIL, pas par le nom de l'auteur.
+
+        Sans lui, le seuil était décoratif : le ramener à 0 ne cassait aucun
+        test, alors qu'il accepte alors n'importe quel titre.
+        """
+        docs = [{"cover_i": 42, "title": "Cri de la chouette", "author_name": ["Hervé Bazin"]}]
+        with patch.object(book_lookup, "get_with_retry", return_value=self.open_library(docs)):
+            url = get_cover_by_title(title="Vipère au poing", author="Hervé Bazin")
+        self.assertIsNone(url)
+
+    def test_refuse_la_couverture_d_un_autre_tome(self):
+        """Le seuil de titre est aveugle au numéro : 0,94 entre deux tomes.
+
+        Sans contrôle de tome ici, deux volumes dont on vient de séparer les
+        ISBN se verraient redonner la même jaquette.
+        """
+        docs = [{"cover_i": 42, "title": "Vernon Subutex 1", "author_name": ["Virginie Despentes"]}]
+        with patch.object(book_lookup, "get_with_retry", return_value=self.open_library(docs)):
+            url = get_cover_by_title(title="Vernon Subutex. 2", author="Despentes, Virginie")
+        self.assertIsNone(url)
+
+    def test_accepte_la_couverture_du_bon_tome(self):
+        docs = [{"cover_i": 42, "title": "Vernon Subutex. 2", "author_name": ["Virginie Despentes"]}]
+        with patch.object(book_lookup, "get_with_retry", return_value=self.open_library(docs)):
+            url = get_cover_by_title(title="Vernon Subutex. 2", author="Despentes, Virginie")
+        self.assertEqual(url, "https://covers.openlibrary.org/b/id/42-L.jpg")
+
+    def test_refuse_un_homonyme_avec_l_auteur_ecrit_par_le_catalogue(self):
+        """La forme réelle du site d'appel, « Anouilh, Jean ».
+
+        L'auteur vient d'une NOTICE, pas de l'inventaire : la virgule y sépare
+        le nom du prénom, et la lire comme un séparateur de co-auteurs faisait
+        de « jean » un nom de famille acceptable — la couverture de l'Antigone
+        de Racine passait pour celle d'Anouilh.
+        """
+        docs = [{"cover_i": 42, "title": "Antigone", "author_name": ["Jean Racine"]}]
+        with patch.object(book_lookup, "get_with_retry", return_value=self.open_library(docs)):
+            url = get_cover_by_title(title="Antigone", author="Anouilh, Jean")
+        self.assertIsNone(url)
+
+    def test_accepte_le_bon_auteur_ecrit_par_le_catalogue(self):
+        docs = [{"cover_i": 42, "title": "Antigone", "author_name": ["Jean Anouilh"]}]
+        with patch.object(book_lookup, "get_with_retry", return_value=self.open_library(docs)):
+            url = get_cover_by_title(title="Antigone", author="Anouilh, Jean")
+        self.assertEqual(url, "https://covers.openlibrary.org/b/id/42-L.jpg")
+
     def test_refuse_un_homonyme_de_prenom(self):
         docs = [{"cover_i": 42, "title": "Antigone", "author_name": ["Jean Racine"]}]
         with patch.object(book_lookup, "get_with_retry", return_value=self.open_library(docs)):
@@ -410,3 +472,69 @@ class CoverByTitleTests(SimpleTestCase):
     def test_survit_a_des_sources_muettes(self):
         with patch.object(book_lookup, "get_with_retry", return_value=None):
             self.assertIsNone(get_cover_by_title(title="Vipère au poing", author="Hervé Bazin"))
+
+
+class CoverChainTests(SimpleTestCase):
+    """La chaîne, pas seulement les morceaux.
+
+    Les tests précédents éprouvaient chaque fonction en isolation :
+    neutraliser complètement le repli par titre laissait la suite verte,
+    alors que c'est lui qui fait passer le taux de couverture de 40 % à 70 %.
+    """
+
+    def find(self, book, cover=None, by_title="https://exemple.test/repli.jpg"):
+        with patch.object(book_lookup, "get_book_information", return_value=book), \
+             patch.object(book_lookup, "get_cover", return_value=cover), \
+             patch.object(book_lookup, "get_cover_by_title", return_value=by_title), \
+             patch.object(book_lookup, "get_wikipedia_fr_summary", return_value=None):
+            return book_lookup.find_book_details(isbn="9782764813447")
+
+    def test_se_rabat_sur_la_recherche_par_titre(self):
+        details = self.find({"title": "Kukum", "author": "Michel Jean", "cover": None})
+        self.assertEqual(details.picture, "https://exemple.test/repli.jpg")
+
+    def test_ne_se_rabat_pas_quand_l_isbn_a_deja_donne_une_image(self):
+        details = self.find({"title": "Kukum", "author": "Michel Jean", "cover": None},
+                            cover="https://exemple.test/isbn.jpg")
+        self.assertEqual(details.picture, "https://exemple.test/isbn.jpg")
+
+    def test_ne_se_rabat_pas_quand_la_notice_porte_une_image(self):
+        details = self.find({"title": "Kukum", "author": "Michel Jean",
+                             "cover": "https://exemple.test/notice.jpg"})
+        self.assertEqual(details.picture, "https://exemple.test/notice.jpg")
+
+    def test_reste_sans_image_si_le_repli_ne_trouve_rien(self):
+        details = self.find({"title": "Kukum", "author": "Michel Jean", "cover": None}, by_title=None)
+        self.assertIsNone(details.picture)
+
+
+class CoverBorrowedFromOtherSourceTests(SimpleTestCase):
+    """L'emprunt entre sources, éprouvé là où il sert.
+
+    Les fixtures de préférence de source ne portaient aucune clé « cover » :
+    remettre le comportement d'avant ne cassait donc aucun test, alors que
+    c'est la cause nº 1 du taux de 40 %.
+    """
+
+    def catalogs(self, **sources):
+        base = {"wikipedia": None, "google": None, "bnf": None, "open_library": None}
+        base.update(sources)
+        return base
+
+    def test_wikipedia_emprunte_l_image_de_google(self):
+        wikipedia = {"title": "Kukum", "description": "Un résumé.", "cover": None}
+        google = {"title": "Kukum", "description": "Autre", "cover": "https://exemple.test/g.jpg"}
+        with patch.object(book_lookup, "fetch_in_parallel",
+                          return_value=self.catalogs(wikipedia=wikipedia, google=google)):
+            book = book_lookup.get_book_information(isbn="9782764813447")
+        self.assertEqual(book["cover"], "https://exemple.test/g.jpg")
+        # La notice reste celle de Wikipédia : seule l'image est empruntée.
+        self.assertEqual(book["description"], "Un résumé.")
+
+    def test_wikipedia_emprunte_l_image_de_la_bnf_faute_de_google(self):
+        wikipedia = {"title": "Kukum", "description": "Un résumé.", "cover": None}
+        bnf = {"title": "Kukum", "cover": "https://exemple.test/bnf.jpg"}
+        with patch.object(book_lookup, "fetch_in_parallel",
+                          return_value=self.catalogs(wikipedia=wikipedia, bnf=bnf)):
+            book = book_lookup.get_book_information(isbn="9782764813447")
+        self.assertEqual(book["cover"], "https://exemple.test/bnf.jpg")

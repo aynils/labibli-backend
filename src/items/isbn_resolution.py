@@ -27,8 +27,11 @@ from src.items.book_lookup import BNF_NS, BNF_SRU_URL, GOOGLE_BOOKS_API_KEY, GOO
 from src.helpers.text_matching import (
     author_similarity,
     normalize,
+    same_volume,
     shares_surname,
     title_similarity,
+    volume_number,
+    volume_numbers,
 )
 
 OPEN_LIBRARY_SEARCH_URL = "https://openlibrary.org/search.json"
@@ -165,64 +168,6 @@ SOURCES = (("bnf", search_bnf), ("google", search_google), ("openlibrary", searc
 SERIES_PREFIX = re.compile(r"^.{2,40}?[\s,]*\d{1,3}\s*[-–—:]\s*(?P<rest>.{4,})$")
 SERIES_SUFFIX = re.compile(r"^(?P<rest>.{4,}?)\s*[\(\[]?\d{1,3}[\)\]]?\s*$")
 SUBTITLE = re.compile(r"^(?P<rest>[^;:]{6,}?)\s*[;:]\s*.+$")
-
-
-# Le numéro de tome, sous les formes qu'un inventaire tenu à la main emploie.
-# L'ordre compte : « tome 2 » est explicite, « (6) » l'est presque, un nombre
-# collé à un tiret ne l'est qu'en dernier recours.
-VOLUME_PATTERNS = (
-    re.compile(r"\b(?:tomes?|t\.|vol\.?|volumes?)\s*(\d{1,3})\b", re.IGNORECASE),
-    re.compile(r"[\(\[](\d{1,3})[\)\]]\s*$"),
-    re.compile(r"\s(\d{1,3})\s*[-–—:]"),
-)
-
-
-def volume_number(title: str) -> str:
-    """Le numéro de tome porté par un titre, s'il en porte un."""
-    if not title:
-        return None
-    for pattern in VOLUME_PATTERNS:
-        found = pattern.search(title)
-        if found:
-            return found.group(1).lstrip("0") or "0"
-    return None
-
-
-def volume_numbers(title: str) -> set:
-    """TOUS les numéros de tome cités par un titre.
-
-    Sert à reconnaître les recueils : la BnF publie « Vernon Subutex. Tome 1,
-    tome 2, tome 3 » pour l'intégrale des trois volumes.
-    """
-    if not title:
-        return set()
-    numbers = set()
-    for pattern in VOLUME_PATTERNS:
-        for found in pattern.finditer(title):
-            numbers.add(found.group(1).lstrip("0") or "0")
-    return numbers
-
-
-def same_volume(wanted: str, candidate: str) -> bool:
-    """Vrai si le candidat ne contredit pas le tome demandé.
-
-    Un titre sans tome n'impose rien. Un titre qui en porte un exige que le
-    candidat porte le même : sans ce contrôle, « Vernon subutex tome 2 » et
-    « tome 3 » recevaient le MÊME ISBN, donc la même couverture et le même
-    résumé — constaté en production le 31/08/2026.
-    """
-    number = volume_number(wanted)
-    if number is None:
-        return True
-    # Un recueil n'est pas le tome qu'on cherche. « Vernon Subutex. Tome 1,
-    # tome 2, tome 3 » est l'intégrale : elle contient bien le tome demandé,
-    # mais lui attribuer cet ISBN donnerait à deux fiches distinctes la même
-    # couverture et le même résumé. Mieux vaut aucun ISBN qu'un ISBN commun.
-    if len(volume_numbers(candidate)) > 1:
-        return False
-    if volume_number(candidate) == number:
-        return True
-    return number in normalize(candidate).split()
 
 
 def title_variants(title: str) -> list:

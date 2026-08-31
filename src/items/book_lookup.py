@@ -11,6 +11,7 @@ import requests
 
 from src.helpers.text_matching import (
     TITLE_NOISE,
+    same_volume,
     shares_surname,
     significant_words,
     title_similarity,
@@ -76,6 +77,12 @@ def get_with_retry(url, params=None, attempts=RETRY_ATTEMPTS):
             response = requests.get(url=url, params=params, headers=HEADERS, timeout=TIMEOUT)
         except requests.RequestException:
             return None
+        if response.status_code == 429:
+            # Quota épuisé : ni réessai ni panne, mais tout ce qui suit
+            # reviendra vide. Sans cette trace, un import de collection
+            # entière se dégrade sans que rien ne l'annonce.
+            logger.warning("Quota épuisé sur %s : les fiches suivantes seront incomplètes", url)
+            return response
         if response.status_code not in RETRY_STATUSES:
             return response
         if attempt < attempts - 1:
@@ -349,6 +356,11 @@ def get_cover_by_title(title: str, author: str) -> str:
         return (
             title_similarity(title, candidate_title) >= COVER_TITLE_THRESHOLD
             and shares_surname(author, candidate_author)
+            # Le seuil de titre est aveugle au numéro de tome : « Vernon
+            # Subutex. 2 » et « Vernon Subutex 1 » se ressemblent à 0,94.
+            # Sans ce contrôle, deux tomes dont on vient de séparer les ISBN
+            # se verraient redonner la MÊME jaquette.
+            and same_volume(title, candidate_title)
         )
 
     response = get_with_retry(
