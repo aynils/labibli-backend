@@ -9,7 +9,12 @@ from urllib.parse import quote
 
 import requests
 
-from src.helpers.text_matching import significant_words
+from src.helpers.text_matching import (
+    TITLE_NOISE,
+    shares_surname,
+    significant_words,
+    title_similarity,
+)
 
 GOOGLE_URL = "https://www.googleapis.com/books/v1/volumes"
 OPEN_LIBRARY_URL = "https://openlibrary.org/api/books"
@@ -30,6 +35,11 @@ TIMEOUT = 5
 RETRY_STATUSES = (500, 502, 503, 504)
 RETRY_ATTEMPTS = 3
 RETRY_PAUSE = 0.6
+
+# Une couverture d'une autre édition reste acceptable ; celle d'un autre
+# ouvrage, non. Le seuil est celui de la résolution d'ISBN, pour la même
+# raison : un titre doit se ressembler de près.
+COVER_TITLE_THRESHOLD = 0.82
 
 GOOGLE_BOOKS_API_KEY = os.environ.get("GOOGLE_BOOKS_API_KEY")
 
@@ -306,6 +316,68 @@ def get_wikipedia_fr_summary(title: str, author: str) -> str:
     return None
 
 
+OPEN_LIBRARY_SEARCH_URL = "https://openlibrary.org/search.json"
+
+
+def get_cover_by_title(title: str, author: str) -> str:
+    """Une couverture retrouvée par le titre et l'auteur, faute d'ISBN utile.
+
+    Les inventaires de médiathèque sont pleins d'éditions de club — France
+    Loisirs, Le Grand Livre du Mois — dont l'ISBN n'est référencé nulle part,
+    alors que l'œuvre a des couvertures partout. Chercher par titre relève le
+    taux de 40 % à environ 77 % sur un échantillon réel.
+
+    ⚠️ L'image obtenue est donc celle d'une AUTRE édition que l'exemplaire
+    catalogué. C'est un compromis assumé pour une vitrine : montrer le livre
+    vaut mieux que montrer un rectangle vide, mais la jaquette peut ne pas
+    être celle du rayon.
+
+    Le titre et l'auteur du candidat sont vérifiés avant de retenir l'image :
+    coller la couverture d'un autre ouvrage serait pire que rien.
+    """
+    if not title or not author:
+        return None
+
+    # Le titre vient d'un catalogue, qui y colle sa mention d'édition :
+    # chercher « Moi d'abord: roman » ne rend rien là où « Moi d'abord »
+    # trouve la couverture. Et l'auteur peut inclure la traduction — le
+    # premier nom suffit à chercher, la vérification garde le reste.
+    query_title = TITLE_NOISE.sub("", title).strip() or title
+    query_author = author.split(",")[0].strip() or author
+
+    def convient(candidate_title, candidate_author) -> bool:
+        return (
+            title_similarity(title, candidate_title) >= COVER_TITLE_THRESHOLD
+            and shares_surname(author, candidate_author)
+        )
+
+    response = get_with_retry(
+        OPEN_LIBRARY_SEARCH_URL,
+        {"title": query_title, "author": query_author, "limit": 3,
+         "fields": "cover_i,title,author_name"},
+    )
+    if response is not None and response.status_code == 200:
+        for doc in response.json().get("docs", []):
+            if doc.get("cover_i") and convient(doc.get("title", ""), ", ".join(doc.get("author_name", []))):
+                return f"https://covers.openlibrary.org/b/id/{doc['cover_i']}-L.jpg"
+
+    params = {
+        "q": f'intitle:"{query_title}" inauthor:"{query_author}"',
+        "fields": "items/volumeInfo(title,authors,imageLinks)",
+        "maxResults": 3,
+    }
+    if GOOGLE_BOOKS_API_KEY:
+        params["key"] = GOOGLE_BOOKS_API_KEY
+    response = get_with_retry(GOOGLE_URL, params)
+    if response is not None and response.status_code == 200:
+        for item in response.json().get("items", []):
+            volume = item.get("volumeInfo", {})
+            thumbnail = (volume.get("imageLinks") or {}).get("thumbnail")
+            if thumbnail and convient(volume.get("title", ""), ", ".join(volume.get("authors", []))):
+                return thumbnail
+    return None
+
+
 def get_cover(isbn: str) -> str:
     url = f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false"
     try:
@@ -348,6 +420,32 @@ def fetch_in_parallel(tasks: dict) -> dict:
     return results
 
 
+# Ordre de préférence des couvertures, indépendant de celui des notices :
+# Google en a presque toujours une, la BnF quand l'ouvrage a un ARK image.
+COVER_SOURCES = ("google", "bnf", "open_library")
+
+
+def with_best_cover(book: dict, catalogs: dict) -> dict:
+    """Complète une notice avec la meilleure couverture disponible.
+
+    La notice retenue n'a pas forcément d'image : celle de Wikipédia n'en a
+    JAMAIS, et c'est la source préférée. Sa couverture était donc perdue même
+    quand Google ou la BnF en avaient rendu une — 11 couvertures pour 24
+    ouvrages trouvés, mesuré sur un import réel le 31/08/2026.
+
+    Seule l'image est empruntée : la source des métadonnées, elle, ne change
+    pas d'un iota.
+    """
+    if book.get("cover"):
+        return book
+    for name in COVER_SOURCES:
+        other = catalogs.get(name)
+        if other and other.get("cover"):
+            book["cover"] = other["cover"]
+            return book
+    return book
+
+
 def get_book_information(isbn: str):
     """La meilleure notice disponible pour cet ISBN.
 
@@ -369,10 +467,10 @@ def get_book_information(isbn: str):
     if wikipedia_book:
         if not wikipedia_book.get("description") and google_book:
             wikipedia_book["description"] = google_book.get("description")
-        return wikipedia_book
+        return with_best_cover(wikipedia_book, catalogs)
 
     if google_book:
-        return google_book
+        return with_best_cover(google_book, catalogs)
 
     bnf_book = catalogs["bnf"]
     if bnf_book:
@@ -387,9 +485,10 @@ def get_book_information(isbn: str):
             )["google"]
         if google_book:
             bnf_book["description"] = google_book.get("description")
-        return bnf_book
+        return with_best_cover(bnf_book, catalogs)
 
-    return catalogs["open_library"]
+    open_library_book = catalogs["open_library"]
+    return with_best_cover(open_library_book, catalogs) if open_library_book else None
 
 
 def find_book_details(isbn: str) -> BookDetails:
@@ -406,6 +505,11 @@ def find_book_details(isbn: str) -> BookDetails:
         return None
 
     cover = fetched["cover"] or book.get("cover")
+    if not cover:
+        # Dernier recours : la couverture d'une autre édition de la même
+        # œuvre. Les éditions de club, majoritaires dans les inventaires de
+        # médiathèque, n'en ont aucune sous leur propre ISBN.
+        cover = get_cover_by_title(title=book.get("title"), author=book.get("author"))
     description = book.get("description")
     if not description:
         # Aucune des sources par ISBN ne rend de résumé fiable : Wikipédia

@@ -11,7 +11,12 @@ from unittest.mock import Mock, patch
 from django.test import SimpleTestCase
 
 from src.items import book_lookup
-from src.items.book_lookup import get_with_retry, get_wikipedia_fr_summary
+from src.items.book_lookup import (
+    get_cover_by_title,
+    get_with_retry,
+    get_wikipedia_fr_summary,
+    with_best_cover,
+)
 
 
 def response(status_code=200, payload=None):
@@ -300,3 +305,108 @@ class ParallelLookupTests(SimpleTestCase):
 
         self.assertEqual(details.picture, "https://exemple.test/couverture.jpg")
         self.assertLess(elapsed, 0.4)
+
+
+class BestCoverTests(SimpleTestCase):
+    """La notice préférée n'a pas toujours l'image.
+
+    Wikipédia est la source préférée et ne rend JAMAIS de couverture : sans
+    cet emprunt, celle que Google ou la BnF avaient déjà rendue était perdue.
+    Mesuré sur un import réel : 11 couvertures pour 24 ouvrages trouvés.
+    """
+
+    def test_emprunte_la_couverture_d_une_autre_source(self):
+        book = {"title": "Kukum", "cover": None}
+        catalogs = {"google": {"cover": "https://exemple.test/google.jpg"}, "bnf": None}
+        self.assertEqual(with_best_cover(book, catalogs)["cover"], "https://exemple.test/google.jpg")
+
+    def test_ne_remplace_pas_une_couverture_deja_presente(self):
+        book = {"cover": "https://exemple.test/sienne.jpg"}
+        catalogs = {"google": {"cover": "https://exemple.test/google.jpg"}}
+        self.assertEqual(with_best_cover(book, catalogs)["cover"], "https://exemple.test/sienne.jpg")
+
+    def test_suit_l_ordre_de_preference_des_images(self):
+        book = {"cover": None}
+        catalogs = {
+            "google": {"cover": "https://exemple.test/google.jpg"},
+            "bnf": {"cover": "https://exemple.test/bnf.jpg"},
+        }
+        self.assertEqual(with_best_cover(book, catalogs)["cover"], "https://exemple.test/google.jpg")
+
+    def test_se_rabat_sur_la_source_suivante(self):
+        book = {"cover": None}
+        catalogs = {"google": None, "bnf": {"cover": "https://exemple.test/bnf.jpg"}}
+        self.assertEqual(with_best_cover(book, catalogs)["cover"], "https://exemple.test/bnf.jpg")
+
+    def test_reste_sans_image_si_personne_n_en_a(self):
+        book = {"cover": None}
+        self.assertIsNone(with_best_cover(book, {"google": None, "bnf": {"cover": None}})["cover"])
+
+    def test_n_emprunte_que_l_image_pas_les_metadonnees(self):
+        """La source des métadonnées ne doit pas changer d'un iota."""
+        book = {"title": "Kukum", "author": "Michel Jean", "cover": None}
+        catalogs = {"google": {"title": "AUTRE", "author": "AUTRE", "cover": "https://exemple.test/g.jpg"}}
+        result = with_best_cover(book, catalogs)
+        self.assertEqual(result["title"], "Kukum")
+        self.assertEqual(result["author"], "Michel Jean")
+
+
+class CoverByTitleTests(SimpleTestCase):
+    """Le rattrapage des éditions de club.
+
+    Les inventaires de médiathèque listent des éditions France Loisirs ou
+    Grand Livre du Mois, dont l'ISBN n'est référencé nulle part alors que
+    l'œuvre a des couvertures partout. Mesuré : 6 récupérations sur 10.
+    """
+
+    def open_library(self, docs):
+        return response(200, {"docs": docs})
+
+    def test_retient_la_couverture_d_une_autre_edition(self):
+        docs = [{"cover_i": 42, "title": "Vipère au poing", "author_name": ["Hervé Bazin"]}]
+        with patch.object(book_lookup, "get_with_retry", return_value=self.open_library(docs)):
+            url = get_cover_by_title(title="Vipère au poing", author="Hervé Bazin")
+        self.assertEqual(url, "https://covers.openlibrary.org/b/id/42-L.jpg")
+
+    def test_refuse_la_couverture_d_un_autre_ouvrage(self):
+        """Le garde-fou qui compte : une jaquette fausse est pire que rien."""
+        docs = [{"cover_i": 42, "title": "Le Grand Meaulnes", "author_name": ["Alain-Fournier"]}]
+        with patch.object(book_lookup, "get_with_retry", return_value=self.open_library(docs)):
+            url = get_cover_by_title(title="Vipère au poing", author="Hervé Bazin")
+        self.assertIsNone(url)
+
+    def test_refuse_un_homonyme_de_prenom(self):
+        docs = [{"cover_i": 42, "title": "Antigone", "author_name": ["Jean Racine"]}]
+        with patch.object(book_lookup, "get_with_retry", return_value=self.open_library(docs)):
+            url = get_cover_by_title(title="Antigone", author="Jean Anouilh")
+        self.assertIsNone(url)
+
+    def test_se_rabat_sur_google_quand_openlibrary_n_a_rien(self):
+        google = response(200, {"items": [{"volumeInfo": {
+            "title": "Tu vivras, mon fils", "authors": ["Pin Yathay"],
+            "imageLinks": {"thumbnail": "https://exemple.test/g.jpg"}}}]})
+        with patch.object(book_lookup, "get_with_retry", side_effect=[self.open_library([]), google]):
+            url = get_cover_by_title(title="Tu vivras, mon fils", author="Pin yathay")
+        self.assertEqual(url, "https://exemple.test/g.jpg")
+
+    def test_cherche_sans_la_mention_d_edition_du_catalogue(self):
+        """Le catalogue colle « : roman » au titre ; la recherche échoue avec.
+
+        C'est ce détail qui faisait retomber le taux de couverture de 77 % à
+        46 % : les URL étaient trouvées en isolation, jamais dans la chaîne.
+        """
+        docs = [{"cover_i": 7, "title": "Moi d'abord", "author_name": ["Katherine Pancol"]}]
+        with patch.object(book_lookup, "get_with_retry", return_value=self.open_library(docs)) as get:
+            get_cover_by_title(title="Moi d'abord: roman", author="Katherine Pancol, Sophie Hanna")
+        params = get.call_args[0][1]
+        self.assertEqual(params["title"], "Moi d'abord")
+        self.assertEqual(params["author"], "Katherine Pancol")
+
+    def test_sans_auteur_on_ne_peut_rien_prouver(self):
+        with patch.object(book_lookup, "get_with_retry") as get:
+            self.assertIsNone(get_cover_by_title(title="Un titre", author=""))
+        get.assert_not_called()
+
+    def test_survit_a_des_sources_muettes(self):
+        with patch.object(book_lookup, "get_with_retry", return_value=None):
+            self.assertIsNone(get_cover_by_title(title="Vipère au poing", author="Hervé Bazin"))
