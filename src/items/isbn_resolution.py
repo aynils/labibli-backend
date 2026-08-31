@@ -167,21 +167,91 @@ SERIES_SUFFIX = re.compile(r"^(?P<rest>.{4,}?)\s*[\(\[]?\d{1,3}[\)\]]?\s*$")
 SUBTITLE = re.compile(r"^(?P<rest>[^;:]{6,}?)\s*[;:]\s*.+$")
 
 
+# Le numéro de tome, sous les formes qu'un inventaire tenu à la main emploie.
+# L'ordre compte : « tome 2 » est explicite, « (6) » l'est presque, un nombre
+# collé à un tiret ne l'est qu'en dernier recours.
+VOLUME_PATTERNS = (
+    re.compile(r"\b(?:tomes?|t\.|vol\.?|volumes?)\s*(\d{1,3})\b", re.IGNORECASE),
+    re.compile(r"[\(\[](\d{1,3})[\)\]]\s*$"),
+    re.compile(r"\s(\d{1,3})\s*[-–—:]"),
+)
+
+
+def volume_number(title: str) -> str:
+    """Le numéro de tome porté par un titre, s'il en porte un."""
+    if not title:
+        return None
+    for pattern in VOLUME_PATTERNS:
+        found = pattern.search(title)
+        if found:
+            return found.group(1).lstrip("0") or "0"
+    return None
+
+
+def volume_numbers(title: str) -> set:
+    """TOUS les numéros de tome cités par un titre.
+
+    Sert à reconnaître les recueils : la BnF publie « Vernon Subutex. Tome 1,
+    tome 2, tome 3 » pour l'intégrale des trois volumes.
+    """
+    if not title:
+        return set()
+    numbers = set()
+    for pattern in VOLUME_PATTERNS:
+        for found in pattern.finditer(title):
+            numbers.add(found.group(1).lstrip("0") or "0")
+    return numbers
+
+
+def same_volume(wanted: str, candidate: str) -> bool:
+    """Vrai si le candidat ne contredit pas le tome demandé.
+
+    Un titre sans tome n'impose rien. Un titre qui en porte un exige que le
+    candidat porte le même : sans ce contrôle, « Vernon subutex tome 2 » et
+    « tome 3 » recevaient le MÊME ISBN, donc la même couverture et le même
+    résumé — constaté en production le 31/08/2026.
+    """
+    number = volume_number(wanted)
+    if number is None:
+        return True
+    # Un recueil n'est pas le tome qu'on cherche. « Vernon Subutex. Tome 1,
+    # tome 2, tome 3 » est l'intégrale : elle contient bien le tome demandé,
+    # mais lui attribuer cet ISBN donnerait à deux fiches distinctes la même
+    # couverture et le même résumé. Mieux vaut aucun ISBN qu'un ISBN commun.
+    if len(volume_numbers(candidate)) > 1:
+        return False
+    if volume_number(candidate) == number:
+        return True
+    return number in normalize(candidate).split()
+
+
 def title_variants(title: str) -> list:
     """Le titre, puis ses réécritures probables, sans doublon.
 
-    Un titre d'inventaire porte souvent ce que le catalogue ne porte pas :
-    le nom de la série, le numéro du tome, un sous-titre recopié de la
-    couverture. On réessaie donc en les retirant, mais seulement après
-    l'échec du titre tel qu'il est écrit.
+    Chaque entrée est un couple (libellé, exiger_le_tome). La distinction
+    compte : « Thorgal 21 - La couronne d'Ogotaï » se retrouve sous le seul
+    titre de l'album, distinctif, qui n'a pas à porter le numéro ; mais
+    « Vernon subutex tome 2 » réduit à « Vernon subutex » désigne la série
+    entière, et accepter un candidat sans numéro donnerait le même ISBN à
+    tous les tomes.
     """
-    variants = [title]
-    for pattern in (SERIES_PREFIX, SUBTITLE, SERIES_SUFFIX):
+    variants = [(title, True)]
+    seen = {normalize(title)}
+
+    def add(candidate, require_volume):
+        cleaned = candidate.strip(" -–—,;:")
+        if cleaned and normalize(cleaned) not in seen:
+            seen.add(normalize(cleaned))
+            variants.append((cleaned, require_volume))
+
+    found = SERIES_PREFIX.match(title.strip())
+    if found:
+        # Ce qui suit le numéro est le titre propre de l'ouvrage.
+        add(found.group("rest"), False)
+    for pattern in (SUBTITLE, SERIES_SUFFIX):
         found = pattern.match(title.strip())
         if found:
-            candidate = found.group("rest").strip(" -–—,;:")
-            if candidate and candidate not in variants:
-                variants.append(candidate)
+            add(found.group("rest"), True)
     return variants
 
 
@@ -195,15 +265,23 @@ def find_isbn(title: str, author: str = "") -> IsbnMatch:
     """
     if not title:
         return None
-    for variant in title_variants(title):
-        match = search_all_sources(variant, author)
+    for variant, require_volume in title_variants(title):
+        # Le titre d'origine reste la référence pour juger le tome, mais
+        # seulement quand la réécriture n'a pas extrait un titre distinct.
+        match = search_all_sources(
+            variant, author, wanted_title=title if require_volume else None
+        )
         if match:
             return match
     return None
 
 
-def search_all_sources(title: str, author: str) -> IsbnMatch:
-    """Interroge les catalogues dans l'ordre pour un libellé de titre donné."""
+def search_all_sources(title: str, author: str, wanted_title: str = None) -> IsbnMatch:
+    """Interroge les catalogues dans l'ordre pour un libellé de titre donné.
+
+    `wanted_title` porte le titre d'origine quand le numéro de tome doit être
+    respecté, et None quand la réécriture a extrait un titre distinct.
+    """
     for name, search in SOURCES:
         best = None
         for isbn, candidate_title, candidate_author in search(title, author):
@@ -214,6 +292,11 @@ def search_all_sources(title: str, author: str) -> IsbnMatch:
             # Un seuil ne suffit pas : « Jean Anouilh » et « Jean Racine »
             # partagent la moitié de leurs mots. Le nom de famille tranche.
             if author and not shares_surname(author, candidate_author):
+                continue
+            # Le numéro de tome est la seule chose qui sépare deux volumes
+            # d'une même série : un candidat qui ne le porte pas est un autre
+            # ouvrage.
+            if wanted_title and not same_volume(wanted_title, candidate_title):
                 continue
             match = IsbnMatch(
                 isbn=isbn,

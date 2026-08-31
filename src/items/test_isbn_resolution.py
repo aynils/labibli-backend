@@ -13,6 +13,8 @@ from src.items import isbn_resolution
 from src.helpers.text_matching import shares_surname
 from src.items.isbn_resolution import (
     AUTHOR_THRESHOLD,
+    same_volume,
+    volume_number,
     TITLE_THRESHOLD,
     author_similarity,
     find_isbn,
@@ -71,21 +73,38 @@ class AuthorSimilarityTests(SimpleTestCase):
 
 
 class TitleVariantTests(SimpleTestCase):
+    """Chaque variante dit aussi si le numéro de tome reste exigible."""
+
+    def labels(self, title):
+        return [label for label, require_volume in title_variants(title)]
+
     def test_retire_la_serie_et_le_tome_places_devant(self):
-        self.assertIn("La couronne d'Ogotaï", title_variants("Thorgal 21 - La couronne d'Ogotaï"))
+        self.assertIn("La couronne d'Ogotaï", self.labels("Thorgal 21 - La couronne d'Ogotaï"))
 
     def test_retire_le_numero_de_tome_place_derriere(self):
-        self.assertIn("421, Les enfants de la porte", title_variants("421, Les enfants de la porte (6)"))
+        self.assertIn("421, Les enfants de la porte", self.labels("421, Les enfants de la porte (6)"))
 
     def test_retire_le_sous_titre(self):
-        self.assertIn("Sur la télévision", title_variants("Sur la télévision ; l'emprise du journalisme"))
+        self.assertIn("Sur la télévision", self.labels("Sur la télévision ; l'emprise du journalisme"))
 
     def test_laisse_un_titre_simple_intact(self):
-        self.assertEqual(title_variants("La servante écarlate"), ["La servante écarlate"])
+        self.assertEqual(self.labels("La servante écarlate"), ["La servante écarlate"])
 
     def test_essaie_toujours_le_titre_ecrit_en_premier(self):
         variants = title_variants("Thorgal 21 - La couronne d'Ogotaï")
-        self.assertEqual(variants[0], "Thorgal 21 - La couronne d'Ogotaï")
+        self.assertEqual(variants[0], ("Thorgal 21 - La couronne d'Ogotaï", True))
+
+    def test_un_titre_propre_extrait_n_exige_plus_le_tome(self):
+        """« La couronne d'Ogotaï » est distinctif : le catalogue peut le
+        publier sans le numéro de la série."""
+        variants = dict(title_variants("Thorgal 21 - La couronne d'Ogotaï"))
+        self.assertFalse(variants["La couronne d'Ogotaï"])
+
+    def test_un_titre_de_serie_ampute_exige_toujours_le_tome(self):
+        """« Vernon subutex » sans numéro désigne la série entière : sans
+        cette exigence, tous les tomes recevraient le même ISBN."""
+        for label, require_volume in title_variants("Vernon subutex tome 2"):
+            self.assertTrue(require_volume, label)
 
 
 class Isbn13Tests(SimpleTestCase):
@@ -261,3 +280,69 @@ class FalseMatchTests(SimpleTestCase):
         with patch.object(isbn_resolution, "SOURCES", self.sources(candidates)):
             match = find_isbn(title="Antigone", author="Jean Anouilh")
         self.assertEqual(match.isbn, "9782070360003")
+
+
+class VolumeTests(SimpleTestCase):
+    """Le numéro de tome, seul élément qui sépare deux volumes d'une série.
+
+    Constaté en production le 31/08/2026 : « Vernon subutex tome 2 » et
+    « tome 3 » avaient reçu le MÊME ISBN, donc la même couverture et le même
+    résumé — la réécriture qui retire le tome les rendait indiscernables.
+    """
+
+    def test_lit_le_numero_sous_ses_formes_courantes(self):
+        self.assertEqual(volume_number("Vernon subutex tome 2"), "2")
+        self.assertEqual(volume_number("Le radeau de bambou, tome 1 l'initiation"), "1")
+        self.assertEqual(volume_number("421, Les enfants de la porte (6)"), "6")
+        self.assertEqual(volume_number("Thorgal 21 - La couronne d'Ogotaï"), "21")
+
+    def test_un_titre_sans_tome_n_en_porte_pas(self):
+        self.assertIsNone(volume_number("Antigone"))
+        self.assertIsNone(volume_number(""))
+
+    def test_un_titre_sans_tome_n_impose_rien(self):
+        self.assertTrue(same_volume("Antigone", "Antigone"))
+
+    def test_refuse_un_candidat_sans_le_tome_demande(self):
+        self.assertFalse(same_volume("Vernon subutex tome 2", "Vernon Subutex"))
+
+    def test_refuse_un_candidat_portant_un_autre_tome(self):
+        self.assertFalse(same_volume("Vernon subutex tome 3", "Vernon Subutex. 2"))
+
+    def test_refuse_un_recueil_de_plusieurs_tomes(self):
+        """L'intégrale n'est pas le tome cherché.
+
+        La BnF publie « Vernon Subutex. Tome 1, tome 2, tome 3 » pour le
+        volume qui les réunit : il contient bien le tome demandé, mais lui
+        donner cet ISBN attribuerait à deux fiches distinctes la même
+        couverture et le même résumé. Constaté en production le 31/08/2026.
+        """
+        recueil = "Vernon Subutex. Tome 1, tome 2, tome 3"
+        self.assertFalse(same_volume("Vernon subutex tome 2", recueil))
+        self.assertFalse(same_volume("Vernon subutex tome 3", recueil))
+
+    def test_accepte_le_tome_ecrit_autrement_par_le_catalogue(self):
+        self.assertTrue(same_volume("Vernon subutex tome 2", "Vernon Subutex. 2"))
+        self.assertTrue(same_volume("Thorgal 21 - La couronne d'Ogotaï",
+                                    "Thorgal. 21, La couronne d'Ogotaï"))
+
+
+class CrossVolumeMatchTests(SimpleTestCase):
+    """Le défaut tel qu'il s'est produit, de bout en bout."""
+
+    def sources(self, candidates):
+        return [("bnf", lambda title, author: list(candidates))]
+
+    def test_deux_tomes_ne_recoivent_pas_le_meme_isbn(self):
+        catalogue = [("9782298141498", "Vernon Subutex. Tome 1, tome 2, tome 3", "Despentes, Virginie")]
+        with patch.object(isbn_resolution, "SOURCES", self.sources(catalogue)):
+            tome2 = find_isbn(title="Vernon subutex tome 2", author="Virginie despentes")
+            tome3 = find_isbn(title="Vernon subutex tome 3", author="Virginie despentes")
+        self.assertIsNone(tome2)
+        self.assertIsNone(tome3)
+
+    def test_le_bon_tome_est_toujours_retenu(self):
+        catalogue = [("9782246813378", "Vernon Subutex. 2", "Despentes, Virginie")]
+        with patch.object(isbn_resolution, "SOURCES", self.sources(catalogue)):
+            match = find_isbn(title="Vernon subutex tome 2", author="Virginie despentes")
+        self.assertEqual(match.isbn, "9782246813378")
