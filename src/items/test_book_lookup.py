@@ -67,11 +67,15 @@ class RetryTests(SimpleTestCase):
         sans trace, la fin du fichier se dégrade sans que rien ne l'annonce.
         C'est la classe de panne du 18/08.
         """
-        with patch.object(book_lookup.requests, "get", return_value=response(429)), \
+        with patch.object(book_lookup, "quota_announced", set()), \
+             patch.object(book_lookup.requests, "get", return_value=response(429)), \
              self.assertLogs("src.items.book_lookup", level="WARNING") as journal:
             result = get_with_retry("https://exemple.test")
+            get_with_retry("https://exemple.test")
         self.assertEqual(result.status_code, 429)
         self.assertIn("Quota", journal.output[0])
+        # Une seule fois : sur 927 lignes, l'avertissement noierait le reste.
+        self.assertEqual(len(journal.output), 1)
 
     def test_ne_reessaie_pas_une_reponse_definitive(self):
         """Un 404 est une réponse : insister ne changerait rien."""

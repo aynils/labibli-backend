@@ -46,6 +46,10 @@ GOOGLE_BOOKS_API_KEY = os.environ.get("GOOGLE_BOOKS_API_KEY")
 
 logger = logging.getLogger(__name__)
 
+# Le quota épuisé n'est annoncé qu'une fois par service : sur un import de
+# collection entière, chaque ligne rejouerait sinon le même avertissement.
+quota_announced = set()
+
 BNF_NS = {
     "srw": "http://www.loc.gov/zing/srw/",
     "dc": "http://purl.org/dc/elements/1.1/",
@@ -81,7 +85,11 @@ def get_with_retry(url, params=None, attempts=RETRY_ATTEMPTS):
             # Quota épuisé : ni réessai ni panne, mais tout ce qui suit
             # reviendra vide. Sans cette trace, un import de collection
             # entière se dégrade sans que rien ne l'annonce.
-            logger.warning("Quota épuisé sur %s : les fiches suivantes seront incomplètes", url)
+            if url not in quota_announced:
+                quota_announced.add(url)
+                logger.warning(
+                    "Quota épuisé sur %s : les fiches suivantes seront incomplètes", url
+                )
             return response
         if response.status_code not in RETRY_STATUSES:
             return response

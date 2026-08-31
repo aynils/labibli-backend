@@ -81,11 +81,20 @@ def split_authors(author: str) -> list:
     segments = []
     for part in re.split(r"\bet\b|[;&/]", author):
         pieces = [piece.strip() for piece in part.split(",") if piece.strip()]
-        if len(pieces) == 2 and len(pieces[1].split()) == 1:
-            # « Nom, Prénom » : une seule personne, le nom d'abord.
-            segments.append(pieces[0])
-        else:
-            segments.extend(pieces)
+        index = 0
+        while index < len(pieces):
+            suivant = pieces[index + 1] if index + 1 < len(pieces) else None
+            if suivant and len(suivant.split()) == 1:
+                # « Nom, Prénom » : une seule personne, le nom d'abord. Les
+                # paires se consomment deux par deux, sinon une notice à
+                # plusieurs créateurs — « Anouilh, Jean, Racine, Jean », que
+                # la BnF produit pour un auteur et son traducteur — rendrait
+                # les prénoms comme noms de famille acceptables.
+                segments.append(pieces[index])
+                index += 2
+            else:
+                segments.append(pieces[index])
+                index += 1
     return segments
 
 
@@ -149,9 +158,11 @@ VOLUME_PATTERNS = (
     re.compile(r"\b(?:tomes?|t\.|vol\.?|volumes?)\s*(\d{1,3})\b", re.IGNORECASE),
     re.compile(r"[\(\[](\d{1,3})[\)\]]\s*$"),
     re.compile(r"\s(\d{1,3})\s*[-–—:]"),
-    # Les catalogues numérotent sans marqueur : « Vernon Subutex. 2 ». Le
-    # motif exige une ponctuation devant et se limite à deux chiffres, sinon
-    # « Fahrenheit 451 » deviendrait un tome 451.
+    # Les catalogues numérotent sans marqueur : « Vernon Subutex. 2 ».
+    # ⚠️ C'est la PONCTUATION exigée devant le nombre qui protège les titres
+    # numériques — sans elle, « Fahrenheit 451 » devient un tome 51 et
+    # « 1984 » un tome 84. La borne à deux chiffres ne fait que réduire la
+    # casse. Retirer l'une ou l'autre rouvre le défaut.
     re.compile(r"[.,]\s*(\d{1,2})\s*$"),
 )
 

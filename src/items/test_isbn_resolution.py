@@ -10,7 +10,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from src.items import isbn_resolution
-from src.helpers.text_matching import shares_surname
+from src.helpers.text_matching import shares_surname, split_authors
 from src.items.isbn_resolution import (
     AUTHOR_THRESHOLD,
     same_volume,
@@ -346,3 +346,47 @@ class CrossVolumeMatchTests(SimpleTestCase):
         with patch.object(isbn_resolution, "SOURCES", self.sources(catalogue)):
             match = find_isbn(title="Vernon subutex tome 2", author="Virginie despentes")
         self.assertEqual(match.isbn, "9782246813378")
+
+
+class MultiCreatorNoticeTests(SimpleTestCase):
+    """Les notices à plusieurs créateurs, forme catalogue.
+
+    La BnF joint tous ses `dc:creator` : un roman traduit donne « Anouilh,
+    Jean, Sartre, Jean-Paul ». Découper naïvement sur les virgules rendait
+    « jean » comme nom de famille acceptable, et rouvrait le faux
+    appariement que le garde-fou existe pour fermer.
+    """
+
+    def test_decoupe_deux_createurs_ecrits_nom_prenom(self):
+        self.assertEqual(split_authors("Anouilh, Jean, Racine, Jean"), ["Anouilh", "Racine"])
+
+    def test_decoupe_un_seul_createur_ecrit_nom_prenom(self):
+        self.assertEqual(split_authors("Anouilh, Jean"), ["Anouilh"])
+
+    def test_garde_deux_auteurs_ecrits_prenom_nom(self):
+        self.assertEqual(split_authors("Jean Anouilh, Sophie Hanna"), ["Jean Anouilh", "Sophie Hanna"])
+
+    def test_refuse_l_homonyme_malgre_une_notice_a_deux_createurs(self):
+        self.assertFalse(shares_surname("Anouilh, Jean, Sartre, Jean-Paul", "Jean Racine"))
+
+    def test_accepte_toujours_le_bon_auteur_dans_une_notice_a_deux_createurs(self):
+        self.assertTrue(shares_surname("Anouilh, Jean, Sartre, Jean-Paul", "Jean Anouilh"))
+
+
+class NumericTitleTests(SimpleTestCase):
+    """Les titres qui finissent par un nombre ne sont pas des tomes.
+
+    C'est la ponctuation exigée devant le nombre qui les protège : sans
+    elle, « Fahrenheit 451 » devient le tome 51.
+    """
+
+    def test_un_titre_numerique_ne_porte_pas_de_tome(self):
+        for titre in ("Fahrenheit 451", "1984", "Catch 22", "Le 15e homme"):
+            self.assertIsNone(volume_number(titre), titre)
+
+    def test_un_nombre_precede_d_une_ponctuation_reste_un_tome(self):
+        self.assertEqual(volume_number("Vernon Subutex. 2"), "2")
+        self.assertEqual(volume_number("Harry Potter, 3"), "3")
+
+    def test_un_titre_numerique_ne_bloque_pas_l_appariement(self):
+        self.assertTrue(same_volume("Fahrenheit 451", "Fahrenheit 451 : roman"))
