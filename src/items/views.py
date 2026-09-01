@@ -2,6 +2,7 @@ import dataclasses
 import datetime
 from collections import OrderedDict
 
+from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.db.models import Q
 from django.http import HttpResponse
@@ -123,7 +124,14 @@ class BooksExport(APIView):
 
 
 class BookDetail(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [custom_permissions.IsEmployeeOfOrganization]
+    # Les DEUX, comme partout ailleurs dans le dépôt : sans `IsAuthenticated`,
+    # un anonyme atteint le contrôle par objet, qui lit
+    # `request.user.employee_of_organization` — absent d'`AnonymousUser` — et
+    # rend un 500 au lieu d'un 401.
+    permission_classes = [
+        permissions.IsAuthenticated,
+        custom_permissions.IsEmployeeOfOrganization,
+    ]
     queryset = Book.objects.all()
     serializer_class = BookSerializer
 
@@ -196,14 +204,30 @@ class LendingDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 class ReturnLending(APIView):
+    """Marquer un prêt comme rendu.
+
+    🔴 `IsEmployeeOfOrganization` n'implémente que `has_object_permission`, et
+    DRF ne l'appelle JAMAIS tout seul sur une `APIView` brute — seules les vues
+    génériques le font, depuis `get_object()`. Cette vue n'en est pas une, et sa
+    requête ne portait pas l'organisation : n'importe quelle employée
+    authentifiée pouvait marquer comme rendu le prêt de n'importe quelle autre
+    bibliothèque, en devinant un identifiant. L'API répondait 200.
+
+    Le cloisonnement est donc DANS la requête, seul endroit qui ne dépend
+    d'aucune mécanique de DRF. `get_object_or_404` rend un 404 et non un 403 :
+    on ne confirme pas à une bibliothèque qu'un prêt existe ailleurs.
+    """
+
     permission_classes = [
         permissions.IsAuthenticated,
-        custom_permissions.IsEmployeeOfOrganization,
+        custom_permissions.IsEmployeeOfAnOrganization,
     ]
     queryset = Lending.objects.all()
 
     def post(self, request, pk):
-        lending = Lending.objects.get(id=pk)
+        lending = get_object_or_404(
+            Lending, id=pk, organization=request.user.employee_of_organization
+        )
         serializer = LendingSerializer()
         today = datetime.datetime.today()
         updated_lending = serializer.return_book(lending, returned_at=today)
