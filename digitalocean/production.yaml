@@ -25,29 +25,14 @@
 # déchiffrables que par eux : elles vivent dans ce fichier depuis toujours,
 # c'est la convention de l'hébergeur.
 #
-# ⏳ À AJOUTER quand la commande `rappels` sera en production, et pas avant —
-# sinon la tâche échoue tous les matins à 8 h :
+# ⚠️ « America/Toronto » et non « UTC » pour la tâche `rappels` : le fuseau suit
+# l'heure avancée, donc l'envoi part à 8 h locales toute l'année. Une heure fixe
+# en UTC glisserait d'une heure deux fois par an. Facturé seulement pendant
+# l'exécution, pas entre deux passages.
 #
-# - envs:
-#   - key: DISABLE_COLLECTSTATIC
-#     scope: BUILD_TIME
-#     value: "1"
-#   github:
-#     branch: main
-#     deploy_on_push: true
-#     repo: aynils/labibli-backend
-#   instance_count: 1
-#   instance_size_slug: basic-xxs
-#   kind: SCHEDULED
-#   name: rappels
-#   run_command: python manage.py rappels
-#   schedule:
-#     cron: "0 8 * * *"
-#     time_zone: America/Toronto
-#
-# ⚠️ « America/Toronto » et non « UTC » : le fuseau suit l'heure avancée, donc
-# l'envoi part à 8 h locales toute l'année. Une heure fixe en UTC glisserait
-# d'une heure deux fois par an. Facturé seulement pendant l'exécution.
+# ⛔ `cron` et `time_zone` sont IMBRIQUÉS sous `schedule:`. À plat, DigitalOcean
+# refuse la spec — « unknown field "cron" » — et le refus arrive au moment du
+# collage, pas avant. Vérifié avec `doctl apps spec validate`.
 
 alerts:
 - rule: DOMAIN_FAILED
@@ -128,6 +113,22 @@ jobs:
   kind: PRE_DEPLOY
   name: test
   run_command: python manage.py test
+- envs:
+  - key: DISABLE_COLLECTSTATIC
+    scope: BUILD_TIME
+    value: "1"
+  github:
+    branch: main
+    deploy_on_push: true
+    repo: aynils/labibli-backend
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  kind: SCHEDULED
+  name: rappels
+  run_command: python manage.py rappels
+  schedule:
+    cron: "0 8 * * *"
+    time_zone: America/Toronto
 name: labibli-backend-production
 region: tor
 services:
