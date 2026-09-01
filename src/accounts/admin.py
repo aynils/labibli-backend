@@ -52,12 +52,12 @@ class OrganizationAdmin(admin.ModelAdmin):
         "is_active",
         "member_reminders_enabled",
         "librarian_digest_enabled",
-        "member_reminder_frequency_days",
+        "reminder_schedule_days",
     )
     list_filter = ("is_active", "member_reminders_enabled", "librarian_digest_enabled")
     list_editable = (
         "member_reminders_enabled",
         "librarian_digest_enabled",
-        "member_reminder_frequency_days",
+        "reminder_schedule_days",
     )
     search_fields = ("name",)

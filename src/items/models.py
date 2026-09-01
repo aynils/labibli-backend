@@ -108,6 +108,14 @@ class Lending(models.Model):
         return self.due_at <= datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
 
 
+CLIENT = "customer"
+LIBRAIRE = "librarian"
+DESTINATAIRES = [
+    (CLIENT, "Le membre en retard"),
+    (LIBRAIRE, "La bibliothécaire"),
+]
+
+
 class LendingReminder(models.Model):
     """La trace d'un rappel réellement envoyé — la seule qui existe.
 
@@ -140,6 +148,16 @@ class LendingReminder(models.Model):
     lending = models.ForeignKey(
         to=Lending, on_delete=models.CASCADE, related_name="reminders"
     )
+    # Le palier franchi, en jours après l'échéance. C'est LUI qui dit si une
+    # relance reste à faire : on n'envoie jamais un palier inférieur ou égal à
+    # un palier déjà envoyé.
+    step_days = models.PositiveIntegerField(default=0)
+    # 🔑 Deux histoires indépendantes dans la même table. La bibliothécaire et
+    # le membre suivent les mêmes paliers, mais chacun les franchit pour son
+    # propre compte : une bibliothèque qui n'allume que le récapitulatif ne
+    # doit pas « consommer » les paliers de ses membres, sans quoi le jour où
+    # elle allumerait les rappels, plus personne ne recevrait jamais rien.
+    recipient = models.CharField(max_length=16, choices=DESTINATAIRES, default=CLIENT)
     sent_at = models.DateTimeField(default=now)
     sent_on = models.DateField()
     to_email = models.EmailField(max_length=255)
@@ -147,7 +165,7 @@ class LendingReminder(models.Model):
 
     class Meta:
         unique_together = [
-            ["lending", "sent_on"],
+            ["lending", "step_days", "recipient"],
         ]
         ordering = ["-sent_at"]
         indexes = [
@@ -156,24 +174,20 @@ class LendingReminder(models.Model):
 
 
 class LibrarianDigest(models.Model):
-    """La trace du récapitulatif quotidien envoyé à la bibliothécaire.
+    """La trace des récapitulatifs envoyés — un journal, PAS une garde.
 
-    Le `unique_together ('organization', 'sent_on')` est la garantie, et elle
-    est dans la BASE : une organisation reçoit au plus UN récapitulatif par
-    jour. Ça tient si la tâche planifiée repasse, si quelqu'un relance la
-    commande à la main après une coupure, ou si deux exécutions se croisent —
-    et c'est exactement ce qui arrive un matin où le déploiement de 8 h a
-    échoué et où on rejoue la commande à 8 h 10.
+    ⚠️ Elle portait un `unique_together (organization, sent_on)`, « au plus un
+    récapitulatif par jour ». Ce garde-fou a été RETIRÉ le 01/09/2026, et
+    c'est un test qui l'a exigé : depuis que le récapitulatif suit les paliers,
+    la non-répétition est déjà tenue, et bien mieux, par
+    `LendingReminder (lending, step_days, recipient)` — un palier ne peut pas
+    partir deux fois, jamais, quel que soit le jour. Deux mécanismes pour une
+    seule garantie, et c'est le plus faible qui gagnait : il faisait taire une
+    relance légitime au seul motif qu'un courriel était déjà parti ce
+    matin-là.
 
-    ⚠️ Il n'y a PAS de réglage de fréquence en face de cette trace, à la
-    différence de `LendingReminder`. Un récapitulatif n'est pas une relance :
-    c'est l'état des retards du jour. Sa cadence est celle de la tâche
-    planifiée, et un second réglage qui dirait autre chose que le `cron`
-    finirait par le contredire en silence.
-
-    `lendings_count` est gardé pour qu'on puisse répondre, trois mois plus
-    tard, à « est-ce que le récapitulatif du 12 était vide ou est-ce qu'il
-    n'est jamais parti ? ». Sans lui, la trace ne distingue pas les deux.
+    Ce qui reste ici sert à répondre, trois mois plus tard, à « est-ce que le
+    récapitulatif du 12 est parti, et à quelle adresse ? ».
     """
 
     organization = models.ForeignKey(to=Organization, on_delete=models.CASCADE)
@@ -183,7 +197,4 @@ class LibrarianDigest(models.Model):
     lendings_count = models.IntegerField(default=0)
 
     class Meta:
-        unique_together = [
-            ["organization", "sent_on"],
-        ]
         ordering = ["-sent_at"]

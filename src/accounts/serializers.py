@@ -18,7 +18,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "owner",
             "is_subscribed",
             "member_reminders_enabled",
-            "member_reminder_frequency_days",
+            "reminder_schedule_days",
             "librarian_digest_enabled",
         ]
 

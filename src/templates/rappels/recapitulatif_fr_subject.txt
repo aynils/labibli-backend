@@ -1,1 +1,1 @@
-{% if lendings|length > 1 %}{{ lendings|length }} retours en retard{% else %}Un retour en retard{% endif %} — {{ organization.name }}
+{% if lendings|length > 1 %}{{ lendings|length }} relances de retard{% else %}Une relance de retard{% endif %} — {{ organization.name }}

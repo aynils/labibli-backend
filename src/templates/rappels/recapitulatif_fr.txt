@@ -1,19 +1,20 @@
 {% load dates_fr %}Bonjour{% if organization.owner.first_name %} {{ organization.owner.first_name }}{% endif %},
 
-Au {{ at|date_fr }}, {% if lendings|length > 1 %}{{ lendings|length }} livres ne sont pas revenus{% else %}un livre n'est pas revenu{% endif %} à {{ organization.name }}.
+Au {{ at|date_fr }}, {% if lendings|length > 1 %}{{ lendings|length }} prêts en retard atteignent une étape de relance{% else %}un prêt en retard atteint une étape de relance{% endif %} à {{ organization.name }}.
 {% for lending in lendings %}
   {{ lending.days_late }} j — « {{ lending.title }} »{% if lending.author %}, {{ lending.author }}{% endif %}
        {{ lending.customer }}{% if lending.email %} — {{ lending.email }}{% elif lending.phone %} — {{ lending.phone }}{% endif %}
-       à rendre le {{ lending.due_at|date_fr }}{% if lending.archived %} — fiche archivée{% elif not lending.email %} — aucune adresse courriel{% endif %}
+       à rendre le {{ lending.due_at|date_fr }}{% if lending.step_days == dernier_palier %} — dernière relance automatique{% endif %}
+       {% if lending.membre_prevenu %}✓ rappel envoyé au membre{% else %}⚠️ le membre n'a PAS été prévenu{% if lending.archived %} (fiche archivée){% elif not lending.email %} (aucune adresse courriel){% elif not member_reminders_enabled %} (rappels aux membres désactivés){% endif %}{% endif %}
 {% endfor %}
-{% if member_reminders_enabled %}Ces membres ont reçu un rappel automatique, sauf ceux signalés ci-dessus comme archivés ou sans adresse courriel.{% else %}⚠️ Les rappels aux membres sont désactivés : personne n'a été relancé automatiquement. Vous pouvez les activer dans les réglages de votre organisation.{% endif %}
-{% if injoignables %}
-{{ injoignables|length }} de ces {% if injoignables|length > 1 %}personnes sont{% else %}personne est{% endif %} hors d'atteinte de l'envoi automatique. {% if injoignables|length > 1 %}Elles ne seront relancées{% else %}Elle ne sera relancée{% endif %} que par vous.
+{% if injoignables %}{{ injoignables|length }} de ces {% if injoignables|length > 1 %}personnes sont{% else %}personne est{% endif %} hors d'atteinte de l'envoi automatique : {% if injoignables|length > 1 %}elles ne seront relancées{% else %}elle ne sera relancée{% endif %} que par vous.
 {% endif %}
+Vous ne recevez ce courriel que les jours où une relance a lieu. La liste
+complète de vos retards reste consultable à tout moment dans « Prêts ».
+
 Bonne journée,
 La Bibli
 
 —
-Ce récapitulatif vous est envoyé chaque matin tant qu'il y a des retards.
-Pour ne plus le recevoir, désactivez-le dans les réglages de votre
-organisation.
+Pour ne plus recevoir ces relances, désactivez-les dans « Mon compte →
+Notifications ».

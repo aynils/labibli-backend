@@ -13,13 +13,22 @@ retards sans encore oser écrire à ses membres est le cas NORMAL, pas
 l'exception — c'est même par là qu'on commence quand on n'a jamais envoyé un
 courriel à personne.
 
-⚠️ Et une asymétrie assumée : le rappel a une fréquence, le récapitulatif
-n'en a pas. Un rappel est une relance sur UN prêt, et il faut donc pouvoir
-espacer les relances. Un récapitulatif est l'état des retards du JOUR : sa
-cadence est celle de la tâche planifiée (8 h, heure de l'Est), et un réglage
-de fréquence en plus du `cron` finirait par le contredire en silence — deux
-horloges qui ne disent pas la même heure. Ce qu'il faut ici n'est pas une
-fréquence, c'est une garantie de non-doublon, et elle est dans la base.
+🔑 Les deux suivent les MÊMES paliers, et chacun sa propre histoire.
+`reminder_schedule_days` vaut par exemple `[0, 7, 30]` : une relance le jour
+du retard, une le septième jour, une le trentième — puis plus rien. La règle
+tient en une phrase :
+
+    ⛔ on n'envoie jamais un palier inférieur ou égal à un palier déjà envoyé.
+
+Elle couvre le déroulé ordinaire ET le cas qui fait peur : un prêt en retard
+de quarante-cinq jours le matin où la bibliothèque active les rappels a
+franchi 0, 7 et 30. Il ne reçoit pas trois courriels d'affilée — il reçoit le
+palier 30, une fois, et plus rien.
+
+Les deux histoires sont SÉPARÉES (`LendingReminder.recipient`). Sinon une
+bibliothèque qui n'allume que le récapitulatif consommerait les paliers de ses
+membres : le jour où elle allumerait les rappels, plus personne ne recevrait
+jamais rien, et aucune erreur ne le dirait.
 
 Ce module ne contient qu'une seule chose difficile, et ce n'est pas l'envoi
 du courriel : c'est la SÉLECTION. Un rappel envoyé de travers ne lève aucune
@@ -59,7 +68,14 @@ from django.template.loader import render_to_string
 from django.utils import translation
 from django.utils.timezone import now
 
-from src.items.models import Lending, LendingReminder, LibrarianDigest
+from src.helpers.paliers import palier_atteint
+from src.items.models import (
+    CLIENT,
+    LIBRAIRE,
+    Lending,
+    LendingReminder,
+    LibrarianDigest,
+)
 
 # La langue du MEMBRE, pas celle de l'organisation. Une Alliance Française
 # tient sa collection en français et prête à des personnes qui ne le lisent
@@ -91,7 +107,13 @@ class RappelPrevu:
     """Un courriel, une personne, un ou plusieurs prêts en retard."""
 
     customer: object
-    lendings: list
+    # `[(prêt, palier)]` — le palier compte : c'est lui qu'on inscrit dans la
+    # trace, et donc lui qui décide de la relance suivante.
+    relances: list
+
+    @property
+    def lendings(self):
+        return [lending for lending, _ in self.relances]
 
     @property
     def email(self) -> str:
@@ -155,45 +177,61 @@ def joignable(customer) -> bool:
     return not customer.archived and bool((customer.email or "").strip())
 
 
-def prets_en_retard_a_rappeler(organization, at=None) -> list:
-    """Les prêts dont le MEMBRE doit être relancé maintenant."""
+def relances_du_jour(organization, recipient, at=None) -> list:
+    """`[(prêt, palier)]` — les prêts qui franchissent un palier NEUF.
+
+    ⚠️ « Neuf » se lit dans l'histoire de CE destinataire-là. Le membre et la
+    bibliothécaire avancent sur la même échelle sans jamais se marcher dessus.
+    """
     at = at or now()
-    retards = [
-        lending
-        for lending in prets_en_retard(organization, at=at)
+    paliers = organization.reminder_schedule_days
+
+    # Le plus haut palier déjà envoyé pour chaque prêt, en UNE requête.
+    #
+    # 🔴 Le filtre porte l'organisation. Sans elle, on lirait l'histoire de
+    # toutes les bibliothèques : les paliers d'une voisine feraient taire les
+    # nôtres, sans lever la moindre erreur — une bibliothèque entière cesserait
+    # d'être servie et le seul symptôme serait un silence.
+    deja_envoyes = {}
+    for lending_id, palier in LendingReminder.objects.filter(
+        organization=organization, recipient=recipient
+    ).values_list("lending_id", "step_days"):
+        if palier > deja_envoyes.get(lending_id, -1):
+            deja_envoyes[lending_id] = palier
+
+    relances = []
+    for lending in prets_en_retard(organization, at=at):
+        jours_de_retard = (at - lending.due_at).days
+        palier = palier_atteint(jours_de_retard, paliers)
+        if palier is None:
+            # Le premier palier n'est pas encore franchi.
+            continue
+        if palier <= deja_envoyes.get(lending.id, -1):
+            # ⛔ La garantie centrale : ce palier-là est fait. Et comme
+            # `palier_atteint` ne redescend jamais, passé le dernier palier
+            # cette condition est vraie pour toujours — c'est ainsi qu'on
+            # finit par se taire.
+            continue
+        relances.append((lending, palier))
+    return relances
+
+
+def prets_a_relancer(organization, at=None) -> list:
+    """Côté membre : les relances du jour, moins les personnes injoignables."""
+    return [
+        (lending, palier)
+        for lending, palier in relances_du_jour(organization, CLIENT, at=at)
         if joignable(lending.customer)
     ]
 
-    fenetre = at - datetime.timedelta(
-        days=organization.member_reminder_frequency_days
-    )
 
-    # Les prêts déjà rappelés dans la fenêtre, en UNE requête.
-    #
-    # ⚠️ Un `.exists()` par prêt ferait une requête par prêt en retard. Sur
-    # une collection de trois mille ouvrages, la tournée de nuit passerait
-    # son temps à demander la même chose. La question se pose une fois.
-    #
-    # Le filtre porte l'organisation : il est vrai qu'un identifiant de prêt
-    # est unique dans toute la base, si bien que le résultat serait le même
-    # sans lui — mais il évite de rapatrier la trace des seize autres
-    # bibliothèques pour la jeter ensuite, et il dit à la relecture où est
-    # le cloisonnement.
-    deja_rappeles = set(
-        LendingReminder.objects.filter(
-            organization=organization, sent_at__gt=fenetre
-        ).values_list("lending_id", flat=True)
-    )
-    return [lending for lending in retards if lending.id not in deja_rappeles]
-
-
-def grouper_par_membre(lendings) -> List[RappelPrevu]:
+def grouper_par_membre(relances) -> List[RappelPrevu]:
     """Un courriel par personne, pas un courriel par livre."""
     par_membre = {}
-    for lending in lendings:
-        par_membre.setdefault(lending.customer_id, []).append(lending)
+    for lending, palier in relances:
+        par_membre.setdefault(lending.customer_id, []).append((lending, palier))
     return [
-        RappelPrevu(customer=prets[0].customer, lendings=prets)
+        RappelPrevu(customer=prets[0][0].customer, relances=prets)
         for prets in par_membre.values()
     ]
 
@@ -209,7 +247,7 @@ def contexte(rappel: RappelPrevu, organization) -> dict:
                 "due_at": lending.due_at,
                 "days_late": (now() - lending.due_at).days,
             }
-            for lending in rappel.lendings
+            for lending, _ in rappel.relances
         ],
     }
 
@@ -272,9 +310,7 @@ def envoyer_les_rappels(organization, at=None, dry_run=False) -> Rapport:
         rapport.inactive = True
         return rapport
 
-    rapport.prevus = grouper_par_membre(
-        prets_en_retard_a_rappeler(organization, at=at)
-    )
+    rapport.prevus = grouper_par_membre(prets_a_relancer(organization, at=at))
 
     if dry_run:
         # ⛔ On sort AVANT la boucle. Rien n'est envoyé, rien n'est tracé — et
@@ -289,10 +325,12 @@ def envoyer_les_rappels(organization, at=None, dry_run=False) -> Rapport:
                 # disparaît : le rappel repartira au prochain passage. Dans
                 # l'autre ordre, un envoi réussi suivi d'une panne d'écriture
                 # ferait renvoyer le même courriel à chaque exécution.
-                for lending in rappel.lendings:
+                for lending, palier in rappel.relances:
                     LendingReminder.objects.create(
                         organization=organization,
                         lending=lending,
+                        step_days=palier,
+                        recipient=CLIENT,
                         sent_at=at,
                         sent_on=at.date(),
                         to_email=rappel.email,
@@ -304,7 +342,7 @@ def envoyer_les_rappels(organization, at=None, dry_run=False) -> Rapport:
             rapport.echecs.append(f"{rappel.email} : {erreur}")
             continue
         rapport.envoyes += 1
-        rapport.prets_rappeles += len(rappel.lendings)
+        rapport.prets_rappeles += len(rappel.relances)
 
     return rapport
 
@@ -323,26 +361,35 @@ class RapportRecap:
     envoye: bool = False
     desactive: bool = False
     inactive: bool = False
-    deja_envoye: bool = False
     sans_destinataire: bool = False
     echec: Optional[str] = None
 
 
-def contexte_recapitulatif(organization, retards, at) -> dict:
+def contexte_recapitulatif(organization, relances, at) -> dict:
     """Ce que la bibliothécaire doit voir, et rien de décoratif.
 
-    `joignable` est calculé ici plutôt que dans le gabarit : c'est la colonne
-    qui transforme une liste en liste de tâches. Les membres injoignables sont
-    exactement ceux qu'aucun envoi automatique n'atteindra, donc les seuls sur
-    lesquels elle doive faire quelque chose elle-même.
+    ⚠️ Ce n'est plus la liste de TOUS les retards, c'est la liste des relances
+    du JOUR. La différence est celle entre un courriel qu'on lit et un courriel
+    qui répète la même chose chaque matin jusqu'à ce qu'on cesse de l'ouvrir —
+    et c'est dedans que le nouveau retard se cacherait. La vue d'ensemble reste
+    disponible à tout moment sur l'écran « Prêts », avec ses lignes rouges.
     """
+    # Les prêts pour lesquels le MEMBRE a effectivement été relancé
+    # aujourd'hui. On le lit dans la trace plutôt que de le supposer : si les
+    # rappels aux membres sont éteints, ou si la personne est injoignable,
+    # rien n'est parti, et le dire faussement enverrait la bibliothécaire
+    # attendre un retour que personne n'a demandé.
+    #
+    # 🔴 Cloisonné, comme tout le reste : c'est une lecture de la trace.
+    membres_prevenus = set(
+        LendingReminder.objects.filter(
+            organization=organization, recipient=CLIENT, sent_on=at.date()
+        ).values_list("lending_id", flat=True)
+    )
+
     return {
         "organization": organization,
         "at": at,
-        # ⚠️ On dit à la bibliothécaire si ses membres ont été prévenus ou
-        # non. Sans cette ligne, un récapitulatif de douze retards se lit
-        # comme un reproche alors que, l'interrupteur des membres étant
-        # éteint, PERSONNE n'a été relancé et elle ne peut pas le deviner.
         "member_reminders_enabled": organization.member_reminders_enabled,
         "lendings": [
             {
@@ -353,20 +400,25 @@ def contexte_recapitulatif(organization, retards, at) -> dict:
                 "phone": (lending.customer.phone or "").strip(),
                 "archived": lending.customer.archived,
                 "joignable": joignable(lending.customer),
+                "membre_prevenu": lending.id in membres_prevenus,
+                "step_days": palier,
                 "due_at": lending.due_at,
                 "days_late": (at - lending.due_at).days,
             }
-            for lending in retards
+            for lending, palier in relances
         ],
         "injoignables": [
-            lending for lending in retards if not joignable(lending.customer)
+            lending for lending, _ in relances if not joignable(lending.customer)
         ],
+        # Le dernier palier de la suite : une ligne qui l'atteint est la
+        # DERNIÈRE relance automatique de ce prêt. Après, c'est à elle.
+        "dernier_palier": max(organization.reminder_schedule_days),
     }
 
 
-def envoyer_un_recapitulatif(organization, retards, at) -> None:
+def envoyer_un_recapitulatif(organization, relances, at) -> None:
     """Construit et envoie LE courriel. Ne décide de rien."""
-    contexte_rendu = contexte_recapitulatif(organization, retards, at)
+    contexte_rendu = contexte_recapitulatif(organization, relances, at)
 
     # 🔑 Le français, faute de mieux, et c'est une limite connue : la
     # bibliothécaire est un `User`, et `User` n'a PAS de champ de langue —
@@ -408,7 +460,10 @@ def envoyer_le_recapitulatif(organization, at=None, dry_run=False) -> RapportRec
       4. il y a au moins un retard. Un récapitulatif vide est un courriel de
          plus dans une boîte déjà pleine, et c'est ainsi qu'on apprend aux
          gens à ne plus nous lire ;
-      5. on n'en a pas déjà envoyé un aujourd'hui.
+    ⚠️ Il n'y a PLUS de garde « au plus un par jour ». Elle faisait double
+    emploi avec l'histoire des paliers, qui est plus forte — un palier ne part
+    jamais deux fois — et c'est la plus faible qui l'emportait : elle taisait
+    une relance légitime au motif qu'un courriel était déjà parti le matin.
     """
     at = at or now()
     rapport = RapportRecap(
@@ -432,22 +487,18 @@ def envoyer_le_recapitulatif(organization, at=None, dry_run=False) -> RapportRec
 
     # 🔑 Le plus en retard d'abord. C'est une liste de tâches, pas un
     # journal : la bibliothécaire lit les trois premières lignes et agit.
-    # Rendu dans l'ordre de la requête, le retard de quarante et un jours se
-    # retrouvait coincé entre deux retards de trois jours.
+    #
+    # ⚠️ `LIBRAIRE` : son histoire de paliers est la sienne. Un prêt ne
+    # reparaît que le jour où il franchit un palier de plus, pas tous les
+    # matins jusqu'à ce que le livre revienne.
     rapport.retards = sorted(
-        prets_en_retard(organization, at=at), key=lambda lending: lending.due_at
+        relances_du_jour(organization, LIBRAIRE, at=at),
+        key=lambda relance: relance[0].due_at,
     )
     if not rapport.retards:
-        return rapport
-
-    # 🔴 Le cloisonnement porte sur la trace AUSSI. Sans l'organisation ici,
-    # le récapitulatif d'une bibliothèque empêcherait celui de toutes les
-    # autres : une seule des dix-sept serait prévenue chaque matin, et les
-    # seize autres n'auraient aucune erreur pour le leur dire.
-    if LibrarianDigest.objects.filter(
-        organization=organization, sent_on=at.date()
-    ).exists():
-        rapport.deja_envoye = True
+        # Aucun palier franchi aujourd'hui : rien ne part, et c'est le
+        # comportement voulu — la bibliothécaire garde l'écran « Prêts » pour
+        # la vue d'ensemble à tout moment.
         return rapport
 
     if dry_run:
@@ -467,6 +518,18 @@ def envoyer_le_recapitulatif(organization, at=None, dry_run=False) -> RapportRec
                 to_email=destinataire,
                 lendings_count=len(rapport.retards),
             )
+            # Une trace par prêt relancé, côté bibliothécaire : c'est elle qui
+            # empêchera la même ligne de revenir demain matin.
+            for lending, palier in rapport.retards:
+                LendingReminder.objects.create(
+                    organization=organization,
+                    lending=lending,
+                    step_days=palier,
+                    recipient=LIBRAIRE,
+                    sent_at=at,
+                    sent_on=at.date(),
+                    to_email=destinataire,
+                )
             envoyer_un_recapitulatif(organization, rapport.retards, at)
     except Exception as erreur:  # noqa: BLE001
         rapport.echec = f"{destinataire} : {erreur}"

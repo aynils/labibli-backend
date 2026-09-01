@@ -2,14 +2,14 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8"/>
-    <title>Récapitulatif des retards</title>
+    <title>Relances de retard</title>
 </head>
 <body>
 <p>Bonjour{% if organization.owner.first_name %} {{ organization.owner.first_name }}{% endif %},</p>
 <p>
     Au {{ at|date_fr }},
-    {% if lendings|length > 1 %}{{ lendings|length }} livres ne sont pas revenus{% else %}un livre n'est pas revenu{% endif %}
-    à {{ organization.name }}.
+    {% if lendings|length > 1 %}{{ lendings|length }} prêts en retard atteignent{% else %}un prêt en retard atteint{% endif %}
+    une étape de relance à {{ organization.name }}.
 </p>
 <!-- ⛔ PAS de role="presentation" ici. C'est un vrai tableau de données,
      pas une table de mise en page : lui retirer sa sémantique ferait perdre
@@ -18,13 +18,14 @@
      est le réflexe du courriel HTML, mais il ne vaut que pour les tables qui
      ne servent qu'à positionner. -->
 <table cellpadding="6" cellspacing="0" border="1">
-    <caption>Ouvrages non revenus, du plus en retard au moins en retard</caption>
+    <caption>Relances du jour, du plus en retard au moins en retard</caption>
     <thead>
     <tr>
         <th align="left" scope="col">Retard</th>
         <th align="left" scope="col">Ouvrage</th>
         <th align="left" scope="col">Membre</th>
         <th align="left" scope="col">À rendre le</th>
+        <th align="left" scope="col">Relance</th>
     </tr>
     </thead>
     <tbody>
@@ -34,38 +35,38 @@
         <td>«&nbsp;{{ lending.title }}&nbsp;»{% if lending.author %}, {{ lending.author }}{% endif %}</td>
         <td>
             {{ lending.customer }}{% if lending.email %}<br>{{ lending.email }}{% elif lending.phone %}<br>{{ lending.phone }}{% endif %}
-            {% if lending.archived %}<br><em>fiche archivée</em>{% elif not lending.email %}<br><em>aucune adresse courriel</em>{% endif %}
         </td>
         <td>{{ lending.due_at|date_fr }}</td>
+        <td>
+            {% if lending.membre_prevenu %}
+                ✓ rappel envoyé au membre
+            {% else %}
+                ⚠️ le membre n'a <strong>pas</strong> été prévenu{% if lending.archived %} (fiche archivée){% elif not lending.email %} (aucune adresse courriel){% elif not member_reminders_enabled %} (rappels aux membres désactivés){% endif %}
+            {% endif %}
+            {% if lending.step_days == dernier_palier %}<br><em>dernière relance automatique</em>{% endif %}
+        </td>
     </tr>
     {% endfor %}
     </tbody>
 </table>
-<p>
-    {% if member_reminders_enabled %}
-        Ces membres ont reçu un rappel automatique, sauf ceux signalés ci-dessus
-        comme archivés ou sans adresse courriel.
-    {% else %}
-        ⚠️ Les rappels aux membres sont désactivés : personne n'a été relancé
-        automatiquement. Vous pouvez les activer dans les réglages de votre
-        organisation.
-    {% endif %}
-</p>
 {% if injoignables %}
 <p>
     {{ injoignables|length }} de ces
     {% if injoignables|length > 1 %}personnes sont{% else %}personne est{% endif %}
-    hors d'atteinte de l'envoi automatique.
-    {% if injoignables|length > 1 %}Elles ne seront relancées{% else %}Elle ne sera relancée{% endif %}
+    hors d'atteinte de l'envoi automatique :
+    {% if injoignables|length > 1 %}elles ne seront relancées{% else %}elle ne sera relancée{% endif %}
     que par vous.
 </p>
 {% endif %}
+<p>
+    Vous ne recevez ce courriel que les jours où une relance a lieu. La liste
+    complète de vos retards reste consultable à tout moment dans «&nbsp;Prêts&nbsp;».
+</p>
 <p>Bonne journée,<br>La Bibli</p>
 <hr>
 <p>
-    Ce récapitulatif vous est envoyé chaque matin tant qu'il y a des retards.
-    Pour ne plus le recevoir, désactivez-le dans les réglages de votre
-    organisation.
+    Pour ne plus recevoir ces relances, désactivez-les dans
+    «&nbsp;Mon compte → Notifications&nbsp;».
 </p>
 </body>
 </html>

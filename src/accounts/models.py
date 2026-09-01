@@ -1,10 +1,12 @@
 import uuid
 
 from authemail.models import EmailAbstractUser, EmailUserManager
-from django.core.validators import MinValueValidator
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.dispatch import receiver
 from django.utils.timezone import now
+
+from src.helpers.paliers import normaliser_paliers, paliers_par_defaut
 
 
 class User(EmailAbstractUser):
@@ -48,17 +50,27 @@ class Organization(models.Model):
         verbose_name="Rappels de retard aux MEMBRES",
     )
 
-    # La fréquence : nombre de jours entre deux rappels pour le MÊME prêt.
-    # C'est elle qui empêche de harceler un membre en retard de trois mois,
-    # et c'est elle, aussi, qui rend la commande rejouable — relancée le même
-    # jour, elle ne renvoie rien.
+    # Les PALIERS de relance, en jours après l'échéance : [0, 7, 30] veut
+    # dire une relance le jour du retard, une septième jour, une trentième —
+    # puis PLUS RIEN.
     #
-    # ⛔ Jamais 0 : une fréquence nulle voudrait dire « à chaque exécution »,
-    # donc autant de courriels que de passages de la tâche planifiée.
-    member_reminder_frequency_days = models.PositiveIntegerField(
-        default=7,
-        validators=[MinValueValidator(1)],
-        verbose_name="Jours entre deux rappels au même membre, pour le même prêt",
+    # 🔴 Ça remplace un intervalle qui se répétait sans fin. Une personne qui
+    # ne rendait jamais son livre recevait un courriel toutes les semaines,
+    # indéfiniment, au nom de sa bibliothèque. Ce n'était plus une relance,
+    # c'était du harcèlement automatisé — et personne ne pouvait répondre à la
+    # question « combien de rappels envoie-t-on ? ». La longueur de la liste y
+    # répond maintenant.
+    #
+    # ⚠️ `ArrayField` et non `JSONField` : Postgres refuse lui-même un élément
+    # qui n'est pas un entier. Le reste — trié, dédoublonné, borné, non vide —
+    # est tenu par `normaliser_paliers`, appelé à la fois par les validateurs
+    # (formulaires, API) et par `save()` ci-dessous, qui est la seule barrière
+    # que le `manage.py shell` d'un soir de correctif ne contourne pas.
+    reminder_schedule_days = ArrayField(
+        models.PositiveIntegerField(),
+        default=paliers_par_defaut,
+        validators=[normaliser_paliers],
+        verbose_name="Paliers de relance, en jours après l'échéance (ex. 0, 7, 30)",
     )
 
     # Le récapitulatif à la bibliothécaire n'a PAS de fréquence, et c'est
@@ -68,6 +80,19 @@ class Organization(models.Model):
         default=False,
         verbose_name="Récapitulatif quotidien des retards à la BIBLIOTHÉCAIRE",
     )
+
+    def save(self, *args, **kwargs):
+        """🔴 La normalisation des paliers est ici, pas seulement dans un
+        validateur de formulaire.
+
+        Les validateurs de champ ne s'exécutent QUE sur `full_clean()`, donc
+        depuis l'admin et depuis l'API. Un `manage.py shell` — c'est-à-dire
+        l'outil qu'on prend justement le soir où quelque chose ne va pas —
+        poserait « [-3] » sans un mot, et la tâche de 8 h lèverait le
+        lendemain, pour les dix-sept organisations d'un coup.
+        """
+        self.reminder_schedule_days = normaliser_paliers(self.reminder_schedule_days)
+        super().save(*args, **kwargs)
 
     @property
     def is_subscribed(self):

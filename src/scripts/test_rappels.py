@@ -28,7 +28,14 @@ from django.utils.timezone import now
 from src.accounts.models import Organization
 from src.customers.models import Customer
 from src.helpers.tests import create_admin_user, create_organization, create_user
-from src.items.models import Book, Lending, LendingReminder, LibrarianDigest
+from src.items.models import (
+    CLIENT,
+    LIBRAIRE,
+    Book,
+    Lending,
+    LendingReminder,
+    LibrarianDigest,
+)
 from src.items.templatetags.dates_fr import date_fr
 from src.items.reminders import (
     envoyer_le_recapitulatif,
@@ -184,24 +191,6 @@ class RappelsTests(TestCase):
         mois_anglais = pret.due_at.strftime("%B")  # « August », « March »…
         self.assertIn(mois_anglais, mail.outbox[0].body)
 
-    def test_renvoie_APRES_la_fenetre_de_frequence(self):
-        """La fréquence est un intervalle, pas un interrupteur : passé le
-        délai, le rappel doit repartir, sinon un retard s'oublie."""
-        membre = self.membre()
-        pret = self.pret(membre)
-        self.lancer()
-        self.assertEqual(len(mail.outbox), 1)
-
-        trace = LendingReminder.objects.get(lending=pret)
-        trace.sent_at = now() - datetime.timedelta(days=8)
-        trace.sent_on = trace.sent_at.date()
-        trace.save()
-
-        self.lancer()
-        self.assertEqual(len(mail.outbox), 2)
-
-    # ── ⛔ Ce qu'elle ne doit JAMAIS faire ───────────────────────────────
-
     def test_n_envoie_RIEN_quand_l_organisation_n_a_PAS_active_les_rappels(self):
         """🔴 La garde la plus chère du lot.
 
@@ -277,20 +266,6 @@ class RappelsTests(TestCase):
 
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(LendingReminder.objects.count(), 1)
-
-    def test_n_envoie_PAS_avant_la_fin_de_la_fenetre_de_frequence(self):
-        """Trois jours après, avec une fréquence de sept : toujours rien."""
-        membre = self.membre()
-        pret = self.pret(membre)
-        self.lancer()
-
-        trace = LendingReminder.objects.get(lending=pret)
-        trace.sent_at = now() - datetime.timedelta(days=3)
-        trace.sent_on = trace.sent_at.date()
-        trace.save()
-
-        self.lancer()
-        self.assertEqual(len(mail.outbox), 1)
 
     def test_n_envoie_RIEN_sur_un_pret_DEJA_RENDU(self):
         """Le livre est revenu au comptoir. Le réclamer est la façon la plus
@@ -406,7 +381,7 @@ class ReglagesParOrganisationTests(TestCase):
         )
         self.assertFalse(organization.member_reminders_enabled)
         self.assertFalse(organization.librarian_digest_enabled)
-        self.assertEqual(organization.member_reminder_frequency_days, 7)
+        self.assertEqual(organization.reminder_schedule_days, [0, 7, 30])
 
 
 class ModuleDEnvoiTests(TestCase):
@@ -600,19 +575,37 @@ class RecapitulatifTests(TestCase):
             ["jeanne@exemple.test"],
         )
 
-    def test_DIT_a_la_bibliothecaire_quand_les_membres_n_ont_pas_ete_prevenus(self):
-        """Sans cette ligne, douze retards se lisent comme un reproche alors
-        que personne n'a été relancé et qu'elle ne peut pas le deviner."""
-        self.pret(self.membre())
-        self.lancer()
-        self.assertIn("rappels aux membres sont désactivés", self.recapitulatifs()[0].body)
+    def test_DIT_LIGNE_PAR_LIGNE_si_le_membre_a_ete_prevenu(self):
+        """Sans ça, la bibliothécaire attend un retour que personne n'a demandé.
 
-        mail.outbox = []
-        LibrarianDigest.objects.all().delete()
+        ⚠️ L'information est lue dans la TRACE, pas déduite du commutateur :
+        même rappels allumés, la personne sans adresse n'a rien reçu.
+        """
         self.organization.member_reminders_enabled = True
         self.organization.save()
+        self.pret(self.membre(prenom="Jeanne"), titre="Kukum")
+        self.pret(self.membre(prenom="Yves", email=None), titre="Nikolski")
+
         self.lancer()
-        self.assertIn("ont reçu un rappel automatique", self.recapitulatifs()[0].body)
+
+        corps = self.recapitulatifs()[0].body
+        ligne_jeanne = corps[corps.index("Kukum"):corps.index("Nikolski")]
+        ligne_yves = corps[corps.index("Nikolski"):]
+        self.assertIn("rappel envoyé au membre", ligne_jeanne)
+        self.assertIn("n'a PAS été prévenu", ligne_yves)
+        self.assertIn("aucune adresse courriel", ligne_yves)
+
+    def test_DIT_que_les_rappels_aux_membres_sont_ETEINTS(self):
+        """Douze relances se lisent comme un reproche quand on ignore que
+        personne n'a été relancé — et elle ne peut pas le deviner."""
+        self.assertFalse(self.organization.member_reminders_enabled)
+        self.pret(self.membre())
+
+        self.lancer()
+
+        corps = self.recapitulatifs()[0].body
+        self.assertIn("n'a PAS été prévenu", corps)
+        self.assertIn("rappels aux membres désactivés", corps)
 
     def test_une_organisation_qui_n_a_QUE_le_recapitulatif_est_balayee(self):
         """⚠️ Le `OR` de la sélection.
@@ -645,7 +638,9 @@ class RecapitulatifTests(TestCase):
         self.assertEqual(len(self.recapitulatifs()), 1)
         # Aucun courriel à un membre.
         self.assertEqual([m for m in mail.outbox if m.to != [self.user.email]], [])
-        self.assertEqual(LendingReminder.objects.count(), 0)
+        # ⚠️ `recipient=CLIENT` : depuis les paliers, la même table porte AUSSI
+        # l'histoire de la bibliothécaire, qui, elle, doit bien exister.
+        self.assertEqual(LendingReminder.objects.filter(recipient=CLIENT).count(), 0)
 
     def test_l_interrupteur_de_la_BIBLIOTHECAIRE_ne_commande_PAS_celui_des_membres(self):
         """🔴 Le symétrique, et il compte autant.
@@ -667,7 +662,8 @@ class RecapitulatifTests(TestCase):
             [m.to for m in mail.outbox if m.to != [self.user.email]],
             [["jeanne@exemple.test"]],
         )
-        self.assertEqual(LendingReminder.objects.count(), 1)
+        self.assertEqual(LendingReminder.objects.filter(recipient=CLIENT).count(), 1)
+        self.assertEqual(LendingReminder.objects.filter(recipient=LIBRAIRE).count(), 0)
 
     # ── ⛔ Ce qu'il ne doit JAMAIS faire ─────────────────────────────────
 
@@ -700,20 +696,21 @@ class RecapitulatifTests(TestCase):
 
         self.assertEqual(self.recapitulatifs(), [])
         self.assertEqual(LibrarianDigest.objects.count(), 0)
-        self.assertIn("aucun retard", sortie)
+        self.assertIn("aucune relance due aujourd'hui", sortie)
 
     def test_n_envoie_PAS_DEUX_FOIS_le_recapitulatif_le_meme_jour(self):
         """🔴 Le matin où le déploiement de 8 h échoue et où on rejoue la
         commande à 8 h 10.
 
-        ⚠️ Et il ne suffit PAS de compter les courriels. La contrainte
-        d'unicité de la base arrête le doublon toute seule — un mutant l'a
-        montré : en retirant la garde applicative, aucun second courriel ne
-        partait quand même. Mais il partait alors une IntegrityError attrapée
-        et rapportée comme un ÉCHEC D'ENVOI, tous les matins, sur les dix-sept
-        organisations. Un journal qui crie au loup tous les jours est un
-        journal qu'on cesse de lire — et c'est dedans que la vraie panne SMTP
-        se cachera. Le chemin propre fait donc partie de la garantie.
+        ⚠️ Ce n'est plus une garde « un par jour » qui l'empêche — elle a
+        été retirée le 01/09/2026 parce qu'elle taisait des relances
+        légitimes. C'est l'histoire des paliers : les relances de ce matin
+        sont tracées, donc au second passage il n'en reste aucune de neuve.
+
+        Et il ne suffit pas de compter les courriels : le chemin doit être
+        PROPRE. Un journal qui crie au loup tous les matins est un journal
+        qu'on cesse de lire, et c'est dedans que la vraie panne SMTP se
+        cachera.
         """
         self.pret(self.membre())
         self.lancer()
@@ -723,7 +720,7 @@ class RecapitulatifTests(TestCase):
         self.assertEqual(len(self.recapitulatifs()), 1)
         self.assertEqual(LibrarianDigest.objects.count(), 1)
         for sortie in (seconde, troisieme):
-            self.assertIn("déjà envoyé aujourd'hui", sortie)
+            self.assertIn("aucune relance due aujourd'hui", sortie)
             self.assertNotIn("❌", sortie)
 
     def test_n_inscrit_RIEN_pour_un_pret_deja_rendu(self):

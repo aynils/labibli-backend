@@ -159,13 +159,11 @@ class Command(BaseCommand):
                 self.style.WARNING("    ⚠️ bibliothécaire : aucune adresse de destinataire")
             )
         elif not recap.retards:
-            self.stdout.write("    ∅  bibliothécaire : aucun retard, rien à envoyer")
-        elif recap.deja_envoye:
-            self.stdout.write("    ·  bibliothécaire : déjà envoyé aujourd'hui")
+            self.stdout.write("    ∅  bibliothécaire : aucune relance due aujourd'hui")
         elif recap.echec:
             self.stdout.write(self.style.ERROR(f"    ❌ {recap.echec}"))
         else:
             self.stdout.write(
                 f"    {'○' if a_blanc else '✅'} bibliothécaire {recap.destinataire:26} "
-                f"{len(recap.retards)} retard(s)"
+                f"{len(recap.retards)} relance(s)"
             )
