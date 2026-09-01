@@ -1,5 +1,7 @@
 import datetime
 import io
+import os
+import unittest
 
 from PIL import Image
 
@@ -123,3 +125,30 @@ def generate_photo_file():
     file.name = "test.png"
     file.seek(0)
     return file
+
+
+# ---------------------------------------------------------------------------
+# Les tests qui SORTENT SUR LE RÉSEAU
+# ---------------------------------------------------------------------------
+#
+# Deux tests de cette suite interrogent un service tiers en vrai : un catalogue
+# bibliographique, et Stripe. Ils ont leur utilité — ils détectent qu'un
+# fournisseur a changé sous nos pieds — mais ils ne peuvent pas garder la
+# production : ils échouent pour des raisons qui ne sont pas les nôtres. Le
+# 01/09/2026, l'un des deux tombait parce qu'un catalogue avait remis un titre
+# en capitales.
+#
+# 🔴 Le job PRE_DEPLOY de DigitalOcean bloque le déploiement quand la suite
+# rougit. Laisser ces deux-là dedans, c'est accepter qu'un correctif urgent
+# soit retenu par la typographie d'un tiers.
+#
+# ⛔ Ils ne sont donc PAS supprimés : ils sont sortis de la chaîne de
+# déploiement, et se lancent à la demande.
+#
+#     RESEAU=1 DJANGO_SETTINGS_MODULE=config.settings.tests \
+#         ./venv/bin/python manage.py test src --noinput
+RESEAU = os.environ.get("RESEAU") == "1"
+
+sort_sur_le_reseau = unittest.skipUnless(
+    RESEAU, "sort sur le réseau — relancer avec RESEAU=1"
+)

@@ -9,6 +9,7 @@ from src.helpers.tests import (
     create_organization,
     create_subscription,
     create_user,
+    sort_sur_le_reseau,
 )
 
 PRICE_ID_MONTHLY = "price_1KMdUcCpTgAka9PhrPJ3SnpI"
@@ -53,6 +54,7 @@ class PaymentProviderTests(APITestCase):
     def setUp(self):
         pass
 
+    @sort_sur_le_reseau
     def test_create_checkout_session(self):
         authenticate_user(self)
         url = reverse("post_create_checkout_session")

@@ -98,21 +98,24 @@ jobs:
   instance_count: 1
   instance_size_slug: basic-xxs
   kind: PRE_DEPLOY
-  name: migrate
-  run_command: python manage.py migrate
-- envs:
-  - key: DISABLE_COLLECTSTATIC
-    scope: BUILD_TIME
-    value: "1"
-  github:
-    branch: main
-    deploy_on_push: true
-    repo: aynils/labibli-backend
-  instance_count: 1
-  instance_size_slug: basic-xxs
-  kind: PRE_DEPLOY
-  name: test
-  run_command: python manage.py test
+  name: verifier-puis-migrer
+  # 🔴 Le label « src » est OBLIGATOIRE : src/ n'a pas d'__init__.py, donc
+  # « manage.py test » tout court ne découvre RIEN et sort en succès. Le job a
+  # gardé la production pendant des mois en annonçant « NO TESTS RAN ».
+  # 🔴 « --noinput » l'est tout autant : une base test_… laissée par un run
+  # interrompu fait POSER UNE QUESTION au runner, et le job se bloque sur une
+  # invite que personne ne lit.
+  # 🔴 « --settings » n'est pas un détail : DJANGO_SETTINGS_MODULE vaut
+  # « config.settings.production » pour toute l'app, jobs compris. Sans ce
+  # drapeau, la suite tournerait avec le VRAI backend de courriel et le VRAI
+  # stockage — et les tests de rappels envoient des courriels. Le réglage de
+  # test bascule sur locmem, un cache factice, et la même DATABASE_URL, donc la
+  # base test_… se crée bien sur la grappe de production, à côté de la vraie.
+  # 🔑 Les deux commandes sont dans UN SEUL job, enchaînées par « && », parce
+  # que DigitalOcean ne documente nulle part l'ordre de plusieurs PRE_DEPLOY.
+  # En deux jobs, rien ne garantit que la barrière se ferme avant que le schéma
+  # de production ait déjà changé. Ici, c'est le shell qui garantit l'ordre.
+  run_command: python manage.py test src --noinput --settings=config.settings.tests && python manage.py migrate
 - envs:
   - key: DISABLE_COLLECTSTATIC
     scope: BUILD_TIME

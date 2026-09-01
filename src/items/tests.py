@@ -13,6 +13,7 @@ from src.helpers.tests import (
     create_organization,
     create_user,
     generate_photo_file,
+    sort_sur_le_reseau,
 )
 from src.items.models import Book, Collection
 
@@ -769,6 +770,7 @@ class FindBookTests(APITestCase):
     def setUp(self):
         pass
 
+    @sort_sur_le_reseau
     def test_get_book_details(self):
         """
         Ensure book details are returned
