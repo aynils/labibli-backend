@@ -19,6 +19,13 @@ SECRET_KEY = env("DJANGO_SECRET_KEY")
 
 CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]
 
+# Sans ça, `Content-Disposition` n'existe pas pour le JavaScript de
+# l'application : le navigateur reçoit bien l'en-tête, mais CORS le masque,
+# et l'export de la collection serait enregistré sous un nom générique au
+# lieu du nom daté que l'API donne. L'en-tête ne porte aucune donnée
+# sensible.
+CORS_EXPOSE_HEADERS = ["Content-Disposition"]
+
 
 DJANGO_APPS = [
     "django.contrib.admin",

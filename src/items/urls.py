@@ -9,6 +9,10 @@ urlpatterns = [
     path(
         r"books/<int:pk>/", views.BookDetail.as_view(), name="get_put_patch_delete_book"
     ),
+    # L'ordre avec « books/<int:pk>/ » est sans importance : le convertisseur
+    # « int » ne capte pas « export ». La route est ici pour rester avec les
+    # autres routes nommées de « books/ ».
+    path(r"books/export/", views.BooksExport.as_view(), name="export_books"),
     path(r"books/lookup/", views.book_lookup, name="get_book_details"),
     path(r"books/image/", views.fetch_image, name="get_picture_file"),
     # Categories

@@ -32,9 +32,31 @@ from src.items.isbn_resolution import find_isbn, normalize
 from src.items.models import Book, Category
 
 COLUMNS = (
+    # `location` est en DERNIER, et ça n'est pas cosmétique : la moitié des
+    # fichiers reçus n'ont pas d'en-tête et sont donc lus dans cet ordre.
+    # L'insérer au milieu décalerait toutes les colonnes suivantes des
+    # fichiers déjà utilisés.
+    # « archived » vient APRÈS « location », pour la même raison.
     "isbn", "title", "author", "publisher", "published_year", "lang",
-    "category", "cover_url", "description",
+    "category", "cover_url", "description", "location", "archived",
 )
+
+# Ce qu'une cellule peut dire pour signifier « oui ». Les fichiers viennent de
+# tableurs en deux langues et d'exports divers : « Oui », « yes », « 1 »,
+# « true », « x ». Tout le reste vaut non — y compris une cellule vide, ce qui
+# fait qu'un fichier sans colonne « Archivé » importe des ouvrages actifs.
+TRUTHY = {"oui", "o", "yes", "y", "1", "true", "vrai", "x"}
+
+
+def is_archived(value) -> bool:
+    return str(value).strip().lower() in TRUTHY if value is not None else False
+
+# Un ouvrage peut porter plusieurs catégories ; l'export les joint par
+# point-virgule. Le séparateur ne peut pas être la virgule : « Romans,
+# nouvelles » est un nom de rayon parfaitement ordinaire. Et dans un CSV à
+# séparateur point-virgule, une cellule ne peut pas en contenir un sans être
+# protégée, donc aucun fichier existant ne change de sens.
+CATEGORY_SEPARATOR = ";"
 
 
 def isbn_key(isbn) -> str:
@@ -155,6 +177,8 @@ class BookImporter(Importer):
                 or (details.description if details else None)
                 or self.summary_by_title(title, record.get("author"))
             ),
+            location=record.get("location"),
+            archived=is_archived(record.get("archived")),
             inventory=1,
         )
         book.save()
@@ -229,6 +253,10 @@ class BookImporter(Importer):
     def attach_category(self, book, name, organization_id):
         """Rattache l'ouvrage à une catégorie de SON organisation.
 
+        Une cellule peut en nommer plusieurs, séparées par un point-virgule :
+        c'est ce que produit notre propre export, et un ouvrage rangé sous
+        deux rayons ne doit pas en perdre un au retour.
+
         Le fichier du RFNB nommait une catégorie sur chacune de ses lignes :
         la perdre à l'import obligerait à recataloguer à la main. La
         catégorie est cherchée dans la seule organisation qui importe — deux
@@ -242,6 +270,13 @@ class BookImporter(Importer):
         """
         if not name:
             return
+        for single in str(name).split(CATEGORY_SEPARATOR):
+            single = single.strip()
+            if single:
+                book.categories.add(self.category(single, organization_id))
+
+    def category(self, name, organization_id):
+        """La catégorie de CETTE organisation portant ce nom, créée au besoin."""
         cached = self.categories.get((organization_id, name))
         if cached is None:
             cached = Category.objects.filter(
@@ -252,7 +287,7 @@ class BookImporter(Importer):
                     organization_id=organization_id, name=name
                 )
             self.categories[(organization_id, name)] = cached
-        book.categories.add(cached)
+        return cached
 
     def attach_cover(self, book, cover_url, details, title=None, author=None):
         url = (

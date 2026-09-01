@@ -527,12 +527,28 @@ class CoverByTitleTests(SimpleTestCase):
         self.assertIsNone(url)
 
     def test_se_rabat_sur_google_quand_openlibrary_n_a_rien(self):
+        """Et il faut QUATRE réponses, pas deux : chaque source est interrogée
+        d'abord en français, puis sans filtre.
+
+        C'est ce qui empêche « Asterix The Gaul » de s'afficher sur une fiche
+        française. Le test l'énonce en simulant la séquence complète — sans
+        quoi il tombait sur un StopIteration, ce qui ressemble à une panne du
+        code alors que c'est le simulacre qui est trop court.
+        """
         google = response(200, {"items": [{"volumeInfo": {
             "title": "Tu vivras, mon fils", "authors": ["Pin Yathay"],
             "imageLinks": {"thumbnail": "https://exemple.test/g.jpg"}}}]})
-        with patch.object(book_lookup, "get_with_retry", side_effect=[self.open_library([]), google]):
+        reponses = [self.open_library([]), self.open_library([]), google]
+        with patch.object(book_lookup, "get_with_retry", side_effect=reponses) as get:
             url = get_cover_by_title(title="Tu vivras, mon fils", author="Pin yathay")
         self.assertEqual(url, "https://exemple.test/g.jpg")
+        # 🔑 L'ORDRE est le correctif : le français d'abord, sans filtre ensuite.
+        # Sans cette assertion, inverser les deux passages laisserait le test
+        # vert tout en réintroduisant les couvertures anglaises.
+        appels = [appel.args[1] for appel in get.call_args_list]
+        self.assertEqual(appels[0].get("language"), "fre")
+        self.assertNotIn("language", appels[1])
+        self.assertEqual(appels[2].get("langRestrict"), "fr")
 
     def test_cherche_sans_la_mention_d_edition_du_catalogue(self):
         """Le catalogue colle « : roman » au titre ; la recherche échoue avec.

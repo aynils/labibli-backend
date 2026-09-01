@@ -45,8 +45,13 @@ COLUMN_LABELS = {
     # puisqu'il est construit à partir des colonnes réellement demandées.
     "language": ("langue", "language", "lang"),
     "category": ("categorie", "categorie1", "category", "categories"),
+    # Ajouté le 31/08/2026 avec l'export en libre-service : le site promet
+    # que le classeur rendu contient les emplacements, et un export que
+    # notre propre import ne sait pas relire ne rend pas la collection.
+    "location": ("emplacement", "localisation", "location", "rayon", "cote"),
     "cover_url": ("couverture", "url couverture", "cover", "cover url", "image"),
     "description": ("description", "resume", "summary"),
+    "archived": ("archive", "archivee", "archived", "statut"),
     "first_name": ("prenom", "first name", "firstname"),
     "last_name": ("nom", "nom de famille", "last name", "lastname"),
     "email": ("email", "courriel", "mail", "adresse courriel"),

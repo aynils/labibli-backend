@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from src.helpers.query_params import is_true
+from src.items.book_export import export as export_books
 from src.items.book_lookup import download_image, find_book_details
 from src.items.models import Book, Category, Collection, Lending
 from src.items.serializers import (
@@ -80,6 +81,45 @@ class BooksList(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         user = self.request.user
         serializer.save(organization=user.employee_of_organization)
+
+
+class BooksExport(APIView):
+    """Rend la collection en classeur, sans passer par nous.
+
+    Jusqu'ici l'export se faisait à la main, de notre côté, sur demande. Le
+    site le décrit pourtant comme un bouton, et c'est la contrepartie de
+    tout le discours sur la souveraineté des données : une bibliothèque doit
+    pouvoir partir sans nous le demander.
+
+    Le format est celui que `src/imports/readers.py` sait relire — voir
+    `src/items/book_export.py`.
+    """
+
+    permission_classes = [
+        permissions.IsAuthenticated,
+        custom_permissions.IsEmployeeOfAnOrganization,
+    ]
+
+    def get(self, request):
+        # 🔴 L'organisation vient du jeton, jamais d'un paramètre de requête :
+        # un identifiant accepté depuis l'URL rendrait la collection de
+        # n'importe quelle bibliothèque à n'importe qui.
+        organization = request.user.employee_of_organization
+        content = export_books(organization_id=organization.id)
+        response = HttpResponse(
+            content,
+            content_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        )
+        stamp = datetime.date.today().isoformat()
+        # Le nom du fichier ne porte pas celui de l'organisation : il peut
+        # contenir n'importe quel caractère, et un en-tête HTTP mal formé
+        # casse le téléchargement chez le client, pas chez nous.
+        response["Content-Disposition"] = (
+            f'attachment; filename="collection-labibli-{stamp}.xlsx"'
+        )
+        return response
 
 
 class BookDetail(generics.RetrieveUpdateDestroyAPIView):
