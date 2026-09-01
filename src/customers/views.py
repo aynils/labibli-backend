@@ -1,6 +1,6 @@
 from rest_framework import generics, permissions
 
-from src.customers.membership import find_removed, remove
+from src.customers.membership import archive, find_archived
 from src.customers.models import Customer
 from src.customers.serializers import CustomerSerializer
 from src.labibli import permissions as custom_permissions
@@ -35,13 +35,13 @@ class CustomerDetail(generics.RetrieveUpdateDestroyAPIView):
         )
 
     def perform_destroy(self, instance):
-        """Retirer, pas supprimer — voir `src/customers/membership.py`.
+        """Archiver, pas supprimer — voir `src/customers/membership.py`.
 
         `Lending.customer` est en `on_delete=CASCADE` : un `delete()` réel
         emporterait l'historique des prêts, que la documentation promet de
         conserver.
         """
-        remove(instance)
+        archive(instance)
 
 
 class CustomersList(generics.ListCreateAPIView):
@@ -58,7 +58,7 @@ class CustomersList(generics.ListCreateAPIView):
         # mesuré à 31 requêtes sur `accounts_organization` pour 30 membres.
         return (
             Customer.objects.filter(
-                organization=user.employee_of_organization, is_active=True
+                organization=user.employee_of_organization, archived=False
             )
             .select_related("organization")
         )
@@ -72,7 +72,7 @@ class CustomersList(generics.ListCreateAPIView):
         """
         organization = self.request.user.employee_of_organization
         data = serializer.validated_data
-        removed = find_removed(
+        removed = find_archived(
             organization_id=organization.id if organization else None,
             first_name=data.get("first_name"),
             last_name=data.get("last_name"),
@@ -81,4 +81,4 @@ class CustomersList(generics.ListCreateAPIView):
         )
         if removed is not None:
             serializer.instance = removed
-        serializer.save(organization=organization, is_active=True)
+        serializer.save(organization=organization, archived=False)

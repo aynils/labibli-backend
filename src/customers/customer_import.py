@@ -9,7 +9,7 @@ Le dédoublonnage suit `Customer.Meta.unique_together`, qui reconnaît un
 membre par son courriel OU par son téléphone : deux clés, pas une, sinon
 réimporter une liste corrigée crée un second exemplaire de chaque personne.
 """
-from src.customers.membership import find_removed
+from src.customers.membership import find_archived
 from src.customers.models import Customer
 from src.imports.runner import Importer
 from src.helpers.text_matching import normalize
@@ -47,7 +47,7 @@ class CustomerImporter(Importer):
 
     def __init__(self):
         # Index des fiches RETIRÉES, chargé une fois avant la boucle.
-        # `find_removed` appelé par ligne coûtait un à deux SELECT par
+        # `find_archived` appelé par ligne coûtait un à deux SELECT par
         # membre créé — 601 requêtes pour 200 lignes contre 201 avant. C'est
         # le même défaut que `existing_keys` a été écrit pour éviter.
         self.removed = {}
@@ -77,7 +77,7 @@ class CustomerImporter(Importer):
         `build` s'occupe de la réinscrire.
         """
         rows = Customer.objects.filter(
-            organization_id=organization_id, is_active=True
+            organization_id=organization_id, archived=False
         ).values_list(
             "first_name", "last_name", "email", "phone"
         )
@@ -92,7 +92,7 @@ class CustomerImporter(Importer):
         self.removed = {}
         self.removed_for = organization_id
         for customer in Customer.objects.filter(
-            organization_id=organization_id, is_active=False
+            organization_id=organization_id, archived=True
         ):
             for key in keys_for(
                 customer.first_name, customer.last_name, customer.email, customer.phone
@@ -109,7 +109,7 @@ class CustomerImporter(Importer):
         if self.removed_for != organization_id:
             # L'index n'est pas celui de cette organisation : on ne devine
             # pas, on requête.
-            return find_removed(
+            return find_archived(
                 organization_id=organization_id,
                 first_name=record.get("first_name"),
                 last_name=record.get("last_name"),
@@ -138,7 +138,7 @@ class CustomerImporter(Importer):
         customer = self.take_removed(record, organization_id) or Customer(
             organization_id=organization_id
         )
-        customer.is_active = True
+        customer.archived = False
         customer.first_name = record["first_name"]
         customer.last_name = record["last_name"]
         customer.email = record.get("email")

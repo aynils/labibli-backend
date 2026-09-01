@@ -1,19 +1,23 @@
-"""Retirer un membre, et le réinscrire s'il revient.
+"""Archiver un membre, et le réactiver s'il revient.
 
-Retirer un membre ne le supprime PAS de la base, et c'est le seul point de
+Archiver un membre ne le supprime PAS de la base, et c'est le seul point de
 ce module qui compte : `Lending.customer` porte `on_delete=CASCADE`
 (`src/items/models.py`), donc un `DELETE` réel emporterait tout l'historique
 des prêts de la personne. La documentation promet le contraire noir sur
 blanc — « retirer un membre ne supprime pas l'historique de ses prêts » — et
 un historique de prêts effacé ne se reconstitue pas.
 
-Un retrait pose donc `is_active = False` : le membre sort des listes, ses
-prêts restent, et le geste est réversible.
+Archiver un membre pose donc `archived = True` : la personne sort des listes,
+ses prêts restent, et le geste est réversible.
+
+🔑 « archivé », le même mot que pour un livre. Un ouvrage retiré de la
+circulation est archivé, une personne qui n'emprunte plus l'est aussi : deux
+mots pour un même geste feraient diverger l'interface et la documentation.
 
 ⚠️ Conséquence qu'il faut traiter ici et nulle part ailleurs : `Customer`
 déclare `unique_together` sur (organisation, prénom, nom, courriel) et
-(organisation, prénom, nom, téléphone). Une fiche retirée occupe donc encore
-sa place. Sans `find_removed`, une bibliothèque qui retire un membre par
+(organisation, prénom, nom, téléphone). Une fiche archivée occupe donc encore
+sa place. Sans `find_archived`, une bibliothèque qui archive un membre par
 erreur puis le rajoute reçoit le texte brut d'une erreur d'unicité Postgres,
 sans aucun moyen de comprendre que la fiche est simplement masquée.
 """
@@ -22,7 +26,7 @@ from django.db.models import Q
 from src.customers.models import Customer
 
 
-def find_removed(organization_id, first_name, last_name, email=None, phone=None):
+def find_archived(organization_id, first_name, last_name, email=None, phone=None):
     """La fiche RETIRÉE que cette identité désigne, dans CETTE organisation.
 
     Les critères suivent `Customer.Meta.unique_together` — courriel OU
@@ -43,7 +47,7 @@ def find_removed(organization_id, first_name, last_name, email=None, phone=None)
         return None
     same_name = Customer.objects.filter(
         organization_id=organization_id,
-        is_active=False,
+        archived=True,
         first_name=first_name,
         last_name=last_name,
     )
@@ -74,7 +78,7 @@ def find_removed(organization_id, first_name, last_name, email=None, phone=None)
     return None
 
 
-def remove(customer) -> None:
+def archive(customer) -> None:
     """Retire le membre sans toucher à ses prêts."""
-    customer.is_active = False
-    customer.save(update_fields=["is_active"])
+    customer.archived = True
+    customer.save(update_fields=["archived"])

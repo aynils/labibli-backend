@@ -10,7 +10,7 @@ class CustomerSerializer(serializers.ModelSerializer):
     # écriture, un PATCH pourrait sinon masquer un membre sans passer par
     # `perform_destroy`, donc sans le commentaire qui explique pourquoi on ne
     # supprime pas.
-    is_active = serializers.BooleanField(read_only=True)
+    archived = serializers.BooleanField(read_only=True)
 
     def validate(self, attrs):
         """Rend un 400 lisible là où la base rendait un 500.
@@ -64,7 +64,7 @@ class CustomerSerializer(serializers.ModelSerializer):
             if self.instance is not None:
                 clash = clash.exclude(pk=self.instance.pk)
             else:
-                clash = clash.filter(is_active=True)
+                clash = clash.filter(archived=False)
             if clash.exists():
                 raise serializers.ValidationError(
                     {
@@ -80,7 +80,7 @@ class CustomerSerializer(serializers.ModelSerializer):
         model = Customer
         fields = [
             "organization",
-            "is_active",
+            "archived",
             "first_name",
             "last_name",
             "email",

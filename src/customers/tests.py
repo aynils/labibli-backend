@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from src.customers.customer_import import CustomerImporter
-from src.customers.membership import find_removed, remove
+from src.customers.membership import archive, find_archived
 from src.customers.models import Customer
 from src.helpers.tests import (
     authenticate_admin,
@@ -183,7 +183,7 @@ class RemoveCustomerTests(APITestCase):
         )
         # Et la fiche elle-même n'a pas disparu : elle est retirée.
         self.customer.refresh_from_db()
-        self.assertFalse(self.customer.is_active)
+        self.assertTrue(self.customer.archived)
 
     def test_un_membre_retire_sort_de_la_liste(self):
         authenticate_user(self)
@@ -201,13 +201,13 @@ class RemoveCustomerTests(APITestCase):
         response = self.client.delete(self.url())
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.customer.refresh_from_db()
-        self.assertTrue(self.customer.is_active)
+        self.assertFalse(self.customer.archived)
 
     def test_retirer_un_membre_anonymement_est_impossible(self):
         response = self.client.delete(self.url())
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.customer.refresh_from_db()
-        self.assertTrue(self.customer.is_active)
+        self.assertFalse(self.customer.archived)
 
     def test_rajouter_un_membre_retire_le_reinscrit(self):
         """Sans ça, `unique_together` rend une erreur Postgres illisible."""
@@ -229,20 +229,20 @@ class RemoveCustomerTests(APITestCase):
             Customer.objects.filter(organization=self.organization).count(), 1
         )
         self.customer.refresh_from_db()
-        self.assertTrue(self.customer.is_active)
+        self.assertFalse(self.customer.archived)
         self.assertEqual(self.customer.phone, "0000000000")
 
     def test_un_patch_ne_peut_pas_retirer_un_membre(self):
-        """`is_active` est en lecture seule : le retrait passe par DELETE."""
+        """`archived` est en lecture seule : le retrait passe par DELETE."""
         authenticate_user(self)
-        response = self.client.patch(self.url(), {"is_active": False})
+        response = self.client.patch(self.url(), {"archived": True})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.customer.refresh_from_db()
-        self.assertTrue(self.customer.is_active)
+        self.assertFalse(self.customer.archived)
 
     def test_reimporter_une_liste_reinscrit_un_membre_retire(self):
         """Le membre retiré ne doit pas être rangé en « doublon » et rester caché."""
-        remove(self.customer)
+        archive(self.customer)
         report = run_import(
             records=[
                 {
@@ -263,11 +263,11 @@ class RemoveCustomerTests(APITestCase):
             Customer.objects.filter(organization=self.organization).count(), 1
         )
         self.customer.refresh_from_db()
-        self.assertTrue(self.customer.is_active)
+        self.assertFalse(self.customer.archived)
 
     def test_un_import_ne_reinscrit_pas_le_membre_d_une_autre_organisation(self):
-        """🔴 `find_removed` sans organisation réinscrirait chez le voisin."""
-        remove(self.customer)
+        """🔴 `find_archived` sans organisation réinscrirait chez le voisin."""
+        archive(self.customer)
         run_import(
             records=[
                 {
@@ -285,7 +285,7 @@ class RemoveCustomerTests(APITestCase):
         # La fiche du voisin reste retirée, et une NOUVELLE fiche est créée
         # dans l'organisation qui importe.
         self.customer.refresh_from_db()
-        self.assertFalse(self.customer.is_active)
+        self.assertTrue(self.customer.archived)
         self.assertEqual(
             Customer.objects.filter(organization=self.admin_organization).count(), 1
         )
@@ -332,10 +332,10 @@ class CustomerScopeTests(APITestCase):
 
 
 class ReinstatementBoundaryTests(APITestCase):
-    """Ce que `find_removed` ne doit SURTOUT pas attraper.
+    """Ce que `find_archived` ne doit SURTOUT pas attraper.
 
     Trois mutants survivaient à la première version de ces tests : sans
-    `is_active=False`, sans `first_name`, sans `last_name`, les dix-sept
+    `archived=True`, sans `first_name`, sans `last_name`, les dix-sept
     tests restaient verts. Le code était juste ; rien ne le tenait.
     """
 
@@ -353,7 +353,7 @@ class ReinstatementBoundaryTests(APITestCase):
         return self.client.post(reverse("list_post_customer"), data)
 
     def test_rajouter_un_membre_ACTIF_ne_reecrit_pas_sa_fiche(self):
-        """Sans `is_active=False`, l'ajout écrasait une fiche active en silence."""
+        """Sans `archived=True`, l'ajout écrasait une fiche active en silence."""
         actif = Customer.objects.create(
             organization=self.organization,
             first_name="Jean",
@@ -374,15 +374,15 @@ class ReinstatementBoundaryTests(APITestCase):
             first_name="Jeanne",
             last_name="Michel",
             phone="5551234",
-            is_active=False,
+            archived=True,
         )
         response = self.post(first_name="Jean", phone="5551234")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         # La fiche de Jeanne n'a pas bougé, et Jean a bien la sienne.
         retire.refresh_from_db()
-        self.assertFalse(retire.is_active)
+        self.assertTrue(retire.archived)
         self.assertEqual(retire.first_name, "Jeanne")
-        self.assertEqual(Customer.objects.filter(is_active=True).count(), 1)
+        self.assertEqual(Customer.objects.filter(archived=False).count(), 1)
 
     def test_un_membre_sans_contact_retire_puis_rajoute_retrouve_sa_fiche(self):
         """🔴 Le trou mesuré en relecture : deux fiches, l'historique sur la cachée.
@@ -400,13 +400,13 @@ class ReinstatementBoundaryTests(APITestCase):
         lending = create_lending(
             organization=self.organization, customer=sans_contact, book=book
         )
-        remove(sans_contact)
+        archive(sans_contact)
 
         response = self.post(first_name="Sans", last_name="Contact")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Customer.objects.count(), 1)
         sans_contact.refresh_from_db()
-        self.assertTrue(sans_contact.is_active)
+        self.assertFalse(sans_contact.archived)
         # Et l'historique est sur la fiche VISIBLE, pas sur une fiche cachée.
         self.assertEqual(
             Lending.objects.get(id=lending.id).customer_id, sans_contact.id
@@ -416,7 +416,7 @@ class ReinstatementBoundaryTests(APITestCase):
         sans_contact = Customer.objects.create(
             organization=self.organization, first_name="Sans", last_name="Contact"
         )
-        remove(sans_contact)
+        archive(sans_contact)
         run_import(
             records=[{
                 "first_name": "Sans", "last_name": "Contact",
@@ -427,7 +427,7 @@ class ReinstatementBoundaryTests(APITestCase):
         )
         self.assertEqual(Customer.objects.count(), 1)
         sans_contact.refresh_from_db()
-        self.assertTrue(sans_contact.is_active)
+        self.assertFalse(sans_contact.archived)
 
     def test_une_collision_a_l_edition_rend_un_400_et_non_un_500(self):
         """Corriger un courriel vers celui d'un autre membre.
@@ -465,10 +465,10 @@ class ReinstatementBoundaryTests(APITestCase):
 
 
 class FindRemovedTests(TestCase):
-    """`find_removed` éprouvé DIRECTEMENT, et pas seulement à travers l'API.
+    """`find_archived` éprouvé DIRECTEMENT, et pas seulement à travers l'API.
 
     Deux mutants ont survécu à la couverture par les vues : la validation du
-    sérialiseur refuse désormais la collision avant que `find_removed` ait
+    sérialiseur refuse désormais la collision avant que `find_archived` ait
     son mot à dire, donc le défaut n'était plus visible de l'extérieur. Il
     reste réel : `CustomerImporter` n'utilise PAS le sérialiseur, et
     `take_removed` retombe sur cette fonction dès que son index n'est pas
@@ -483,29 +483,29 @@ class FindRemovedTests(TestCase):
         cls.organization = create_organization(owner=cls.user)
         cls.voisine = create_organization(owner=cls.admin_user)
 
-    def customer(self, organization, is_active=True, **fields):
+    def customer(self, organization, archived=False, **fields):
         data = {
             "first_name": "Jean", "last_name": "Michel", "email": "jean@michel.ca",
         }
         data.update(fields)
         return Customer.objects.create(
-            organization=organization, is_active=is_active, **data
+            organization=organization, archived=archived, **data
         )
 
     def test_ne_rend_jamais_une_fiche_ACTIVE(self):
         """Sinon un ajout écrase la fiche d'un membre bien inscrit."""
-        self.customer(self.organization, is_active=True)
+        self.customer(self.organization, archived=False)
         self.assertIsNone(
-            find_removed(
+            find_archived(
                 organization_id=self.organization.id,
                 first_name="Jean", last_name="Michel", email="jean@michel.ca",
             )
         )
 
     def test_rend_la_fiche_retiree(self):
-        retire = self.customer(self.organization, is_active=False)
+        retire = self.customer(self.organization, archived=True)
         self.assertEqual(
-            find_removed(
+            find_archived(
                 organization_id=self.organization.id,
                 first_name="Jean", last_name="Michel", email="jean@michel.ca",
             ),
@@ -514,18 +514,18 @@ class FindRemovedTests(TestCase):
 
     def test_ne_traverse_pas_les_organisations(self):
         """🔴 Réinscrire le membre d'une autre bibliothèque."""
-        self.customer(self.voisine, is_active=False)
+        self.customer(self.voisine, archived=True)
         self.assertIsNone(
-            find_removed(
+            find_archived(
                 organization_id=self.organization.id,
                 first_name="Jean", last_name="Michel", email="jean@michel.ca",
             )
         )
 
     def test_exige_une_organisation(self):
-        self.customer(self.organization, is_active=False)
+        self.customer(self.organization, archived=True)
         self.assertIsNone(
-            find_removed(
+            find_archived(
                 organization_id=None,
                 first_name="Jean", last_name="Michel", email="jean@michel.ca",
             )
@@ -549,7 +549,7 @@ class TakeRemovedTests(TestCase):
         cls.retire = Customer.objects.create(
             organization=cls.organization,
             first_name="Jean", last_name="Michel", email="jean@michel.ca",
-            is_active=False,
+            archived=True,
         )
 
     def record(self):
