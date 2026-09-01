@@ -159,6 +159,12 @@ class CollectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Collection
         fields = [
+            # ⚠️ « id » est indispensable pour RENOMMER : sans lui, l'écran de
+            # compte reçoit la collection mais n'a rien à mettre dans l'URL du
+            # PATCH. Le champ de renommage ne s'affichait tout simplement pas,
+            # sans erreur — il attendait un identifiant que l'API ne donnait
+            # pas. C'est le genre d'absence qu'on cherche du mauvais côté.
+            "id",
             "name",
             "organization",
             "books",
