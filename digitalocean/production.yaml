@@ -1,86 +1,148 @@
+# Spécification de l'application « api.labibli.com » chez DigitalOcean.
+#
+# 🔴 CE FICHIER NE FAIT RIEN TOUT SEUL. DigitalOcean ne lit pas le YAML d'un
+# dépôt : il ne regarde `.do/app.yaml` qu'à la CRÉATION d'une application, et
+# jamais ensuite. Pour l'appliquer : le coller ENTIER dans la console,
+# Settings → App Spec → Edit, puis Save.
+#
+# ⚠️ CE FICHIER EST UNE COPIE CONFORME DE LA SPÉCIFICATION EN LIGNE, et doit le
+# rester. Relire avec `doctl --context bibli apps spec get <id>` avant d'y
+# toucher, et comparer après.
+#
+# ⛔ Il a menti pendant quatre ans. Jusqu'au 01/09/2026 il annonçait
+# PostgreSQL **12** et une base `db-s-dev-database` à un nœud, là où la
+# production tourne depuis longtemps sur un cluster managé en **16**. Il
+# portait aussi `routes:`, que DigitalOcean a remplacé par `ingress:`. Le
+# coller n'aurait pas été un remplacement à l'identique : ça aurait touché à la
+# déclaration de la base de données de production.
+#
+# 🔑 Un fichier de configuration qui n'est appliqué nulle part et que personne
+# ne sait inerte finit par être cru. C'est ce qui a fait écrire « PostgreSQL 12
+# en fin de vie » dans la dette technique du projet, pour une base qui était
+# déjà en 16.
+#
+# Les valeurs `EV[...]` sont chiffrées par DigitalOcean et ne sont
+# déchiffrables que par eux : elles vivent dans ce fichier depuis toujours,
+# c'est la convention de l'hébergeur.
+#
+# ⏳ À AJOUTER quand la commande `rappels` sera en production, et pas avant —
+# sinon la tâche échoue tous les matins à 8 h :
+#
+# - envs:
+#   - key: DISABLE_COLLECTSTATIC
+#     scope: BUILD_TIME
+#     value: "1"
+#   github:
+#     branch: main
+#     deploy_on_push: true
+#     repo: aynils/labibli-backend
+#   instance_count: 1
+#   instance_size_slug: basic-xxs
+#   kind: SCHEDULED
+#   name: rappels
+#   run_command: python manage.py rappels
+#   schedule:
+#     cron: "0 8 * * *"
+#     time_zone: America/Toronto
+#
+# ⚠️ « America/Toronto » et non « UTC » : le fuseau suit l'heure avancée, donc
+# l'envoi part à 8 h locales toute l'année. Une heure fixe en UTC glisserait
+# d'une heure deux fois par an. Facturé seulement pendant l'exécution.
+
 alerts:
-  - rule: DOMAIN_FAILED
-  - rule: DEPLOYMENT_FAILED
+- rule: DOMAIN_FAILED
+- rule: DEPLOYMENT_FAILED
 databases:
-  - engine: PG
-    name: db
-    num_nodes: 1
-    size: db-s-dev-database
-    version: "12"
+- cluster_name: app-d45dea8c-eb50-4ff1-8c38-82b501dc8dd8
+  db_name: db
+  db_user: db
+  engine: PG
+  name: db
+  production: true
+  version: "16"
 domains:
-  - domain: api.labibli.com
-    type: PRIMARY
+- domain: api.labibli.com
+  type: PRIMARY
 envs:
-  - key: DJANGO_SETTINGS_MODULE
-    scope: RUN_AND_BUILD_TIME
-    value: config.settings.production
-  - key: DATABASE_URL
-    scope: RUN_AND_BUILD_TIME
-    value: ${db.DATABASE_URL}
-  - key: DJANGO_SECRET_KEY
-    scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: EV[1:U/ptmdtv7sG4RL4nVrF7mIuTaLwIFPe7:QAQwaiJPtVxqwZmuocxMItfBKdvbbJvkQn2b1erOndAtoz3QWEMD/K9icAerVchIQRkW0o8QMZ9Qityv/P3lrqhb2GhwRSbuiHW6Ht+Ki6nXLdym0b/5dsMlpWYXmamwRQRj27Qa5hwgZ+iTA1WvowJ6gQ==]
-  - key: POSTMARK_API_KEY
-    scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: EV[1:WDGMDFUY2/9/YPW+BUvsZ7zO9EIeM7e3:8nQMaI2evymWJgVjSZevPIrBMF5NmehPAgMzx7eTSYCztTLe5IKxOz526ETwKuqcZVm9yQ==]
-  - key: DIGITAL_OCEAN_SECRET_ACCESS_KEY
-    scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: EV[1:OsE3d7ffB/ew6FJ0rBri0+TD+QxiYJKf:EJOt5icHuCx8huSb3Acz6rWslKBx7yLqXqLp+vApOYriphYMMwxMnmEXLWwCnAjwJBs7tF5muDWcd3E=]
-  - key: STRIPE_PRIVATE_KEY
-    scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: EV[1:ijtfGaj7p6HqmwzkqEPe1vuN9t7qLzRj:etVs9NE5IcOS8yQIgNi1gRojOb0/Tgu+L5/JUAYWi8viJfRu/lOZ5e9hsHVEjG8n8eCp0yi+F51o8P+7T/JkLU1X9Zih4iQhpiMF8fbpMm8y3rx9n0EjRb/qJNJz1mK6a+cJd8OHJhsH5wJp6W9/6Xhr/TGjLb5uHz+6]
-  - key: STRIPE_WEBHOOK_KEY
-    scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: EV[1:ePCi/NSonCQkZ0WicNgLSgMC/4o1vhA+:SpLYIG6JXg1CEfvo6KoBlU6MkRS4+4nrBDA/MucogCdYlfO/dFWQtX0JHeYdS4NR/vJP8dfx]
+- key: DJANGO_SETTINGS_MODULE
+  scope: RUN_AND_BUILD_TIME
+  value: config.settings.production
+- key: DATABASE_URL
+  scope: RUN_AND_BUILD_TIME
+  value: ${db.DATABASE_URL}
+- key: DJANGO_SECRET_KEY
+  scope: RUN_AND_BUILD_TIME
+  type: SECRET
+  value: EV[1:U/ptmdtv7sG4RL4nVrF7mIuTaLwIFPe7:QAQwaiJPtVxqwZmuocxMItfBKdvbbJvkQn2b1erOndAtoz3QWEMD/K9icAerVchIQRkW0o8QMZ9Qityv/P3lrqhb2GhwRSbuiHW6Ht+Ki6nXLdym0b/5dsMlpWYXmamwRQRj27Qa5hwgZ+iTA1WvowJ6gQ==]
+- key: POSTMARK_API_KEY
+  scope: RUN_AND_BUILD_TIME
+  type: SECRET
+  value: EV[1:WDGMDFUY2/9/YPW+BUvsZ7zO9EIeM7e3:8nQMaI2evymWJgVjSZevPIrBMF5NmehPAgMzx7eTSYCztTLe5IKxOz526ETwKuqcZVm9yQ==]
+- key: DIGITAL_OCEAN_SECRET_ACCESS_KEY
+  scope: RUN_AND_BUILD_TIME
+  type: SECRET
+  value: EV[1:OsE3d7ffB/ew6FJ0rBri0+TD+QxiYJKf:EJOt5icHuCx8huSb3Acz6rWslKBx7yLqXqLp+vApOYriphYMMwxMnmEXLWwCnAjwJBs7tF5muDWcd3E=]
+- key: STRIPE_PRIVATE_KEY
+  scope: RUN_AND_BUILD_TIME
+  type: SECRET
+  value: EV[1:ijtfGaj7p6HqmwzkqEPe1vuN9t7qLzRj:etVs9NE5IcOS8yQIgNi1gRojOb0/Tgu+L5/JUAYWi8viJfRu/lOZ5e9hsHVEjG8n8eCp0yi+F51o8P+7T/JkLU1X9Zih4iQhpiMF8fbpMm8y3rx9n0EjRb/qJNJz1mK6a+cJd8OHJhsH5wJp6W9/6Xhr/TGjLb5uHz+6]
+- key: STRIPE_WEBHOOK_KEY
+  scope: RUN_AND_BUILD_TIME
+  type: SECRET
+  value: EV[1:ePCi/NSonCQkZ0WicNgLSgMC/4o1vhA+:SpLYIG6JXg1CEfvo6KoBlU6MkRS4+4nrBDA/MucogCdYlfO/dFWQtX0JHeYdS4NR/vJP8dfx]
+- key: GOOGLE_BOOKS_API_KEY
+  scope: RUN_AND_BUILD_TIME
+  type: SECRET
+  value: EV[1:ioyOLm7CknJPRV65IS0RDXezyAIIG4IY:GuFraD06xEIp4GeXp5noJH6EFJKXY/QqYQD/XtZRd2wEtZYCqXg67JSSSLwAJq283i1udtAqgg==]
+ingress:
+  rules:
+  - component:
+      name: labibli-backend-production
+    match:
+      path:
+        prefix: /
 jobs:
-  - envs:
-      - key: DISABLE_COLLECTSTATIC
-        scope: BUILD_TIME
-        value: "1"
-    github:
-      branch: main
-      deploy_on_push: true
-      repo: aynils/labibli-backend
-    instance_count: 1
-    instance_size_slug: basic-xxs
-    kind: PRE_DEPLOY
-    name: migrate
-    run_command: python manage.py migrate
-  - envs:
-      - key: DISABLE_COLLECTSTATIC
-        scope: BUILD_TIME
-        value: "1"
-    github:
-      branch: main
-      deploy_on_push: true
-      repo: aynils/labibli-backend
-    instance_count: 1
-    instance_size_slug: basic-xxs
-    kind: PRE_DEPLOY
-    name: test
-    run_command: python manage.py test
+- envs:
+  - key: DISABLE_COLLECTSTATIC
+    scope: BUILD_TIME
+    value: "1"
+  github:
+    branch: main
+    deploy_on_push: true
+    repo: aynils/labibli-backend
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  kind: PRE_DEPLOY
+  name: migrate
+  run_command: python manage.py migrate
+- envs:
+  - key: DISABLE_COLLECTSTATIC
+    scope: BUILD_TIME
+    value: "1"
+  github:
+    branch: main
+    deploy_on_push: true
+    repo: aynils/labibli-backend
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  kind: PRE_DEPLOY
+  name: test
+  run_command: python manage.py test
 name: labibli-backend-production
 region: tor
 services:
-  - environment_slug: python
-    envs:
-      - key: DISABLE_COLLECTSTATIC
-        scope: BUILD_TIME
-        value: "1"
-    github:
-      branch: main
-      deploy_on_push: true
-      repo: aynils/labibli-backend
-    http_port: 8080
-    instance_count: 1
-    instance_size_slug: basic-xxs
-    name: labibli-backend-production
-    routes:
-      - path: /
-    run_command: gunicorn --workers 3 --timeout 1200 --worker-tmp-dir /dev/shm config.wsgi
-    source_dir: /
+- environment_slug: python
+  envs:
+  - key: DISABLE_COLLECTSTATIC
+    scope: BUILD_TIME
+    value: "1"
+  github:
+    branch: main
+    deploy_on_push: true
+    repo: aynils/labibli-backend
+  http_port: 8080
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  name: labibli-backend-production
+  run_command: gunicorn --workers 3 --timeout 1200 --worker-tmp-dir /dev/shm config.wsgi
+  source_dir: /
