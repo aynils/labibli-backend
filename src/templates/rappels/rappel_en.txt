@@ -1,0 +1,15 @@
+Hello {{ customer.first_name }},
+
+{% if lendings|length > 1 %}{{ lendings|length }} of the books you borrowed from {{ organization.name }} are past their return date:{% else %}The book you borrowed from {{ organization.name }} is past its return date:{% endif %}
+{% for lending in lendings %}
+  - "{{ lending.title }}"{% if lending.author %}, {{ lending.author }}{% endif %}
+    due on {{ lending.due_at|date:"F j, Y" }}
+{% endfor %}
+If you have already returned {% if lendings|length > 1 %}them{% else %}it{% endif %}, no reply is needed.
+
+Thank you,
+{{ organization.name }}
+
+—
+This reminder was sent automatically by La Bibli on behalf of
+{{ organization.name }}. Reply to this email to reach the library.

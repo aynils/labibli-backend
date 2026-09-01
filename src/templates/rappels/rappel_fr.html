@@ -1,0 +1,31 @@
+{% load dates_fr %}<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Rappel de retour</title>
+</head>
+<body>
+<p>Bonjour {{ customer.first_name }},</p>
+<p>
+    {% if lendings|length > 1 %}La date de retour de {{ lendings|length }} de vos emprunts à {{ organization.name }} est passée :{% else %}La date de retour de votre emprunt à {{ organization.name }} est passée :{% endif %}
+</p>
+<ul>
+    {% for lending in lendings %}
+    <li>
+        «&nbsp;{{ lending.title }}&nbsp;»{% if lending.author %}, {{ lending.author }}{% endif %}
+        — à rendre le {{ lending.due_at|date_fr }}
+    </li>
+    {% endfor %}
+</ul>
+<p>
+    Si {% if lendings|length > 1 %}ces livres ont{% else %}ce livre a{% endif %} déjà été rendu,
+    ce message n'appelle aucune réponse.
+</p>
+<p>Merci,<br>{{ organization.name }}</p>
+<hr>
+<p>
+    Ce rappel est envoyé automatiquement par La Bibli pour le compte de
+    {{ organization.name }}. Répondez à ce courriel pour joindre la bibliothèque.
+</p>
+</body>
+</html>

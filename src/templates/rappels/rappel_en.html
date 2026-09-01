@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Return reminder</title>
+</head>
+<body>
+<p>Hello {{ customer.first_name }},</p>
+<p>
+    {% if lendings|length > 1 %}{{ lendings|length }} of the books you borrowed from {{ organization.name }} are past their return date:{% else %}The book you borrowed from {{ organization.name }} is past its return date:{% endif %}
+</p>
+<ul>
+    {% for lending in lendings %}
+    <li>
+        "{{ lending.title }}"{% if lending.author %}, {{ lending.author }}{% endif %}
+        — due on {{ lending.due_at|date:"F j, Y" }}
+    </li>
+    {% endfor %}
+</ul>
+<p>
+    If you have already returned {% if lendings|length > 1 %}them{% else %}it{% endif %},
+    no reply is needed.
+</p>
+<p>Thank you,<br>{{ organization.name }}</p>
+<hr>
+<p>
+    This reminder was sent automatically by La Bibli on behalf of
+    {{ organization.name }}. Reply to this email to reach the library.
+</p>
+</body>
+</html>

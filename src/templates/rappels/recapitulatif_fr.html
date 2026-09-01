@@ -1,0 +1,71 @@
+{% load dates_fr %}<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Récapitulatif des retards</title>
+</head>
+<body>
+<p>Bonjour{% if organization.owner.first_name %} {{ organization.owner.first_name }}{% endif %},</p>
+<p>
+    Au {{ at|date_fr }},
+    {% if lendings|length > 1 %}{{ lendings|length }} livres ne sont pas revenus{% else %}un livre n'est pas revenu{% endif %}
+    à {{ organization.name }}.
+</p>
+<!-- ⛔ PAS de role="presentation" ici. C'est un vrai tableau de données,
+     pas une table de mise en page : lui retirer sa sémantique ferait perdre
+     au lecteur d'écran l'association entre chaque cellule et son en-tête, et
+     la colonne « Retard » ne voudrait plus rien dire. `role="presentation"`
+     est le réflexe du courriel HTML, mais il ne vaut que pour les tables qui
+     ne servent qu'à positionner. -->
+<table cellpadding="6" cellspacing="0" border="1">
+    <caption>Ouvrages non revenus, du plus en retard au moins en retard</caption>
+    <thead>
+    <tr>
+        <th align="left" scope="col">Retard</th>
+        <th align="left" scope="col">Ouvrage</th>
+        <th align="left" scope="col">Membre</th>
+        <th align="left" scope="col">À rendre le</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for lending in lendings %}
+    <tr>
+        <td>{{ lending.days_late }}&nbsp;j</td>
+        <td>«&nbsp;{{ lending.title }}&nbsp;»{% if lending.author %}, {{ lending.author }}{% endif %}</td>
+        <td>
+            {{ lending.customer }}{% if lending.email %}<br>{{ lending.email }}{% elif lending.phone %}<br>{{ lending.phone }}{% endif %}
+            {% if lending.archived %}<br><em>fiche archivée</em>{% elif not lending.email %}<br><em>aucune adresse courriel</em>{% endif %}
+        </td>
+        <td>{{ lending.due_at|date_fr }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p>
+    {% if member_reminders_enabled %}
+        Ces membres ont reçu un rappel automatique, sauf ceux signalés ci-dessus
+        comme archivés ou sans adresse courriel.
+    {% else %}
+        ⚠️ Les rappels aux membres sont désactivés : personne n'a été relancé
+        automatiquement. Vous pouvez les activer dans les réglages de votre
+        organisation.
+    {% endif %}
+</p>
+{% if injoignables %}
+<p>
+    {{ injoignables|length }} de ces
+    {% if injoignables|length > 1 %}personnes sont{% else %}personne est{% endif %}
+    hors d'atteinte de l'envoi automatique.
+    {% if injoignables|length > 1 %}Elles ne seront relancées{% else %}Elle ne sera relancée{% endif %}
+    que par vous.
+</p>
+{% endif %}
+<p>Bonne journée,<br>La Bibli</p>
+<hr>
+<p>
+    Ce récapitulatif vous est envoyé chaque matin tant qu'il y a des retards.
+    Pour ne plus le recevoir, désactivez-le dans les réglages de votre
+    organisation.
+</p>
+</body>
+</html>

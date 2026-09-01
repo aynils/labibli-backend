@@ -40,6 +40,11 @@ TEMPLATES[-1]["OPTIONS"]["loaders"] = [  # type: ignore[index] # noqa F405
 # https://docs.djangoproject.com/en/dev/ref/settings/#email-backend
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
+# `local.py` et `production.py` la définissent déjà ; `base.py`, non. Sans
+# elle, tout envoi de courriel lève une AttributeError en test — donc les
+# rappels de retard étaient intestables.
+EMAIL_FROM = "contact@labibli.com"
+
 # `path_and_rename` (src/items/models.py) nomme le dossier des couvertures à
 # partir de cette valeur. Sans elle, TOUT enregistrement d'image lève une
 # AttributeError en test — ce qui rendait intestable la moitié de ce qui
