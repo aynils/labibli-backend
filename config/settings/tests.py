@@ -61,3 +61,11 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.dummy.DummyCache",
     }
 }
+
+# ⚠️ `django-rest-authemail` lit `settings.EMAIL_BCC` sans garde-fou dès qu'il
+# envoie un courriel — inscription comprise. Absent des réglages de test, tout
+# test qui passe par l'inscription meurt sur un `AttributeError`, et l'erreur
+# ne parle ni d'inscription ni de courriel.
+#
+# ⛔ Vide, et pas l'adresse d'Aynils : un test ne doit copier personne.
+EMAIL_BCC = ""

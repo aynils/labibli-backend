@@ -106,11 +106,26 @@ class Organization(models.Model):
             return subscription.active
 
 
+# Le nom d'attente, quand l'inscription n'en a pas fourni.
+#
+# 🔴 Il ne contient PLUS l'adresse courriel. L'ancien — « <courriel> - default
+# organization » — se retrouvait dans le nom de la collection, puis en TITRE de
+# la vitrine publique : le 01/09/2026, vingt-deux bibliothèques publiaient
+# l'adresse de leur direction sur une page ouverte à tous, dont des Alliances
+# françaises et des organismes communautaires.
+#
+# ⛔ Rien de ce qui est saisi à l'inscription — courriel, nom de la personne —
+# ne doit entrer dans un champ que la vitrine affiche. Ce sont deux mondes :
+# l'un sert à se connecter, l'autre est public.
+NOM_PAR_DEFAUT = "Ma bibliothèque"
+
+
 @receiver(models.signals.post_save, sender=User)
 def create_organization(sender, instance, created, **kwargs):
     if created:
-        name = f"{instance.email} - default organization"
-        organization = Organization.objects.create(name=name, owner=instance)
+        organization = Organization.objects.create(
+            name=NOM_PAR_DEFAUT, owner=instance
+        )
         instance.employee_of_organization = organization
         instance.save()
         return organization
@@ -121,7 +136,10 @@ def create_collection(sender, instance, created, **kwargs):
     if created:
         from src.items.models import Collection
 
-        name = f"{instance.name} - default collection"
+        # Le nom de la collection SUIT celui de l'organisation, sans suffixe :
+        # c'est lui que la vitrine publique affiche en titre, et « Ma
+        # bibliothèque - default collection » n'est un nom pour personne.
+        name = instance.name
         slug = uuid.uuid4()
         organization = Collection.objects.create(
             name=name, organization=instance, slug=slug

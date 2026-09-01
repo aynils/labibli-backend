@@ -384,9 +384,11 @@ class CollectionTests(APITestCase):
 
     def test_auto_create_collection(self):
         collection = Collection.objects.get(organization=self.organization)
-        self.assertEqual(
-            collection.name, f"{self.organization.name} - default collection"
-        )
+        # 🔑 Le MÊME nom que l'organisation, sans suffixe : c'est ce nom-là
+        # que la vitrine publique affiche en titre, et « … - default
+        # collection » n'est un nom pour personne.
+        self.assertEqual(collection.name, self.organization.name)
+        self.assertNotIn("default", collection.name.lower())
 
     def test_get_collection(self):
         """
@@ -412,10 +414,7 @@ class CollectionTests(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data.__len__(), 1)
-        self.assertEqual(
-            response.data[0].get("name"),
-            f"{self.organization.name} - default collection",
-        )
+        self.assertEqual(response.data[0].get("name"), self.organization.name)
 
     def test_update_collection(self):
         """
