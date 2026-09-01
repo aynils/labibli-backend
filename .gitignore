@@ -20,3 +20,6 @@ tests/report/
 /media/covers/
 # Couvertures écrites par la suite de tests (DJANGO_ENV=TEST les préfixe).
 /media/TEST-covers/
+
+# macOS. Il s'est glissé dans un commit le 01/09/2026 par un « git add -A ».
+.DS_Store
