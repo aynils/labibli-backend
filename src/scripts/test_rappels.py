@@ -27,7 +27,9 @@ from django.utils.timezone import now
 
 from src.accounts.models import Organization
 from src.customers.models import Customer
-from src.helpers.tests import create_admin_user, create_organization, create_user
+from src.helpers.tests import (
+    create_admin_user, create_organization, create_subscription, create_user,
+)
 from src.items.models import (
     CLIENT,
     LIBRAIRE,
@@ -83,6 +85,10 @@ class RappelsTests(TestCase):
     def setUpTestData(cls):
         cls.user = create_user()
         cls.organization = create_organization(owner=cls.user)
+        # ⚠️ Un envoi demande un abonnement actif depuis le 01/09/2026 :
+        # sans cette ligne, tous ces tests décrivent une bibliothèque qui ne
+        # recevrait rien, et ils passeraient pour la mauvaise raison.
+        create_subscription(organization=cls.organization, active=True)
         cls.organization.member_reminders_enabled = True
         cls.organization.member_reminder_frequency_days = 7
         cls.organization.save()
@@ -91,6 +97,10 @@ class RappelsTests(TestCase):
         # tomberait sinon sur la bonne organisation par hasard, ou serait
         # arrêtée par le mauvais motif, et le test passerait quand même.
         cls.voisine = create_organization(owner=create_admin_user())
+        # ⚠️ Un envoi demande un abonnement actif depuis le 01/09/2026 :
+        # sans cette ligne, tous ces tests décrivent une bibliothèque qui ne
+        # recevrait rien, et ils passeraient pour la mauvaise raison.
+        create_subscription(organization=cls.voisine, active=True)
         cls.voisine.name = "Bibliotheque voisine"
         cls.voisine.member_reminders_enabled = True
         cls.voisine.save()
@@ -401,6 +411,10 @@ class ModuleDEnvoiTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.organization = create_organization(owner=create_user())
+        # ⚠️ Un envoi demande un abonnement actif depuis le 01/09/2026 :
+        # sans cette ligne, tous ces tests décrivent une bibliothèque qui ne
+        # recevrait rien, et ils passeraient pour la mauvaise raison.
+        create_subscription(organization=cls.organization, active=True)
 
     def setUp(self):
         mail.outbox = []
@@ -460,6 +474,10 @@ class RecapitulatifTests(TestCase):
     def setUpTestData(cls):
         cls.user = create_user()
         cls.organization = create_organization(owner=cls.user)
+        # ⚠️ Un envoi demande un abonnement actif depuis le 01/09/2026 :
+        # sans cette ligne, tous ces tests décrivent une bibliothèque qui ne
+        # recevrait rien, et ils passeraient pour la mauvaise raison.
+        create_subscription(organization=cls.organization, active=True)
         cls.organization.librarian_digest_enabled = True
         cls.organization.member_reminders_enabled = False
         cls.organization.save()
@@ -467,6 +485,10 @@ class RecapitulatifTests(TestCase):
         # Créée APRÈS, et elle aussi activée : une requête non cloisonnée
         # tomberait sinon sur la bonne organisation par hasard.
         cls.voisine = create_organization(owner=create_admin_user())
+        # ⚠️ Un envoi demande un abonnement actif depuis le 01/09/2026 :
+        # sans cette ligne, tous ces tests décrivent une bibliothèque qui ne
+        # recevrait rien, et ils passeraient pour la mauvaise raison.
+        create_subscription(organization=cls.voisine, active=True)
         cls.voisine.name = "Bibliotheque voisine"
         cls.voisine.librarian_digest_enabled = True
         cls.voisine.save()
@@ -810,6 +832,10 @@ class ModuleDuRecapitulatifTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.organization = create_organization(owner=create_user())
+        # ⚠️ Un envoi demande un abonnement actif depuis le 01/09/2026 :
+        # sans cette ligne, tous ces tests décrivent une bibliothèque qui ne
+        # recevrait rien, et ils passeraient pour la mauvaise raison.
+        create_subscription(organization=cls.organization, active=True)
 
     def setUp(self):
         mail.outbox = []
@@ -853,3 +879,86 @@ class ModuleDuRecapitulatifTests(TestCase):
         self.assertTrue(rapport.inactive)
         self.assertEqual(mail.outbox, [])
         self.assertEqual(LibrarianDigest.objects.count(), 0)
+
+
+class AbonnementTests(TestCase):
+    """🔴 Rien ne part sans abonnement actif — décidé le 01/09/2026.
+
+    ⚠️ Cette garde ne peut RIEN attraper aujourd'hui : l'enregistrement d'un
+    prêt est déjà derrière l'abonnement, donc une bibliothèque qui ne paie pas
+    n'a aucun prêt, donc aucun retard. Mesuré en production : 21 organisations
+    sans abonnement actif, zéro prêt en cours entre elles toutes.
+
+    Elle existe pour le cas qui viendra : une bibliothèque qui a PAYÉ, créé ses
+    prêts, puis résilié. Ses prêts restent en base — on n'efface pas
+    l'historique de quelqu'un qui part — et sans elle La Bibli continuerait
+    d'écrire à ses membres en son nom, indéfiniment.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.organization = create_organization(owner=create_user())
+        cls.organization.member_reminders_enabled = True
+        cls.organization.librarian_digest_enabled = True
+        cls.organization.save()
+        cls.abonnement = create_subscription(organization=cls.organization, active=True)
+
+    def un_retard(self):
+        livre = Book.objects.create(
+            organization=self.organization, title="Kukum", author="Michel Jean"
+        )
+        membre = Customer.objects.create(
+            organization=self.organization, first_name="Claire",
+            last_name="Dubois", email="claire@exemple.test",
+        )
+        # ⚠️ `due_at` est CALCULÉ — `lent_at + allowance_days` — et n'a pas de
+        # setter. Un retard se fabrique en reculant la date de prêt, pas en
+        # posant l'échéance.
+        return Lending.objects.create(
+            organization=self.organization, book=livre, customer=membre,
+            allowance_days=31,
+            lent_at=now() - datetime.timedelta(days=31 + 10),
+        )
+
+    def test_le_RAPPEL_ne_part_pas_apres_une_resiliation(self):
+        self.un_retard()
+        self.abonnement.active = False
+        self.abonnement.save()
+
+        rapport = envoyer_les_rappels(self.organization)
+
+        self.assertTrue(rapport.sans_abonnement)
+        self.assertEqual(rapport.envoyes, 0)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_le_RECAPITULATIF_ne_part_pas_apres_une_resiliation(self):
+        self.un_retard()
+        self.abonnement.active = False
+        self.abonnement.save()
+
+        rapport = envoyer_le_recapitulatif(self.organization)
+
+        self.assertTrue(rapport.sans_abonnement)
+        self.assertFalse(rapport.envoye)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_avec_un_abonnement_ACTIF_le_rappel_part(self):
+        """Le pendant : sans lui, la garde pourrait tout bloquer sans qu'on le voie."""
+        self.un_retard()
+
+        rapport = envoyer_les_rappels(self.organization)
+
+        self.assertFalse(rapport.sans_abonnement)
+        self.assertEqual(rapport.envoyes, 1)
+
+    def test_la_COMMANDE_ne_balaie_pas_une_organisation_resiliee(self):
+        """La sélection filtre aussi : on ne parcourt pas ses prêts pour rien."""
+        self.un_retard()
+        self.abonnement.active = False
+        self.abonnement.save()
+
+        sortie = StringIO()
+        call_command("rappels", stdout=sortie)
+
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertIn("Aucune organisation", sortie.getvalue())

@@ -30,6 +30,7 @@ from src.helpers.tests import (
     authenticate_user,
     create_admin_user,
     create_organization,
+    create_subscription,
     create_user,
 )
 from src.items.models import Book, Lending, LendingReminder, LibrarianDigest  # noqa: F401
@@ -151,11 +152,15 @@ class RelancesSuccessivesTests(TestCase):
     def setUpTestData(cls):
         cls.user = create_user()
         cls.organization = create_organization(owner=cls.user)
+        # ⚠️ Un envoi demande un abonnement actif depuis le 01/09/2026.
+        create_subscription(organization=cls.organization, active=True)
         cls.organization.member_reminders_enabled = True
         cls.organization.librarian_digest_enabled = False
         cls.organization.reminder_schedule_days = [0, 7, 30]
         cls.organization.save()
         cls.voisine = create_organization(owner=create_admin_user())
+        # ⚠️ Un envoi demande un abonnement actif depuis le 01/09/2026.
+        create_subscription(organization=cls.voisine, active=True)
         cls.voisine.name = "Bibliotheque voisine"
         cls.voisine.member_reminders_enabled = True
         cls.voisine.save()
@@ -341,6 +346,8 @@ class PaliersDuRecapitulatifTests(TestCase):
     def setUpTestData(cls):
         cls.user = create_user()
         cls.organization = create_organization(owner=cls.user)
+        # ⚠️ Un envoi demande un abonnement actif depuis le 01/09/2026.
+        create_subscription(organization=cls.organization, active=True)
         cls.organization.librarian_digest_enabled = True
         cls.organization.member_reminders_enabled = False
         cls.organization.reminder_schedule_days = [0, 7, 30]
@@ -453,7 +460,11 @@ class PretsEnRetardTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.organization = create_organization(owner=create_user())
+        # ⚠️ Un envoi demande un abonnement actif depuis le 01/09/2026.
+        create_subscription(organization=cls.organization, active=True)
         cls.voisine = create_organization(owner=create_admin_user())
+        # ⚠️ Un envoi demande un abonnement actif depuis le 01/09/2026.
+        create_subscription(organization=cls.voisine, active=True)
 
     def pret(self, organization, retard_jours, **champs):
         customer = Customer.objects.create(

@@ -134,6 +134,7 @@ class Rapport:
     echecs: List[str] = dataclasses.field(default_factory=list)
     inactive: bool = False
     desactive: bool = False
+    sans_abonnement: bool = False
 
 
 def prets_en_retard(organization, at=None) -> list:
@@ -309,6 +310,22 @@ def envoyer_les_rappels(organization, at=None, dry_run=False) -> Rapport:
     if not organization.is_active:
         rapport.inactive = True
         return rapport
+    if not organization.is_subscribed:
+        # 🔴 L'abonnement, décidé par Séraphin le 01/09/2026.
+        #
+        # Aujourd'hui cette garde ne peut RIEN attraper : l'enregistrement d'un
+        # prêt est déjà derrière l'abonnement, donc une bibliothèque qui ne
+        # paie pas n'a aucun prêt, donc aucun retard. Mesuré en production le
+        # même jour : 21 organisations sans abonnement actif, ZÉRO prêt en
+        # cours entre elles toutes.
+        #
+        # ⚠️ Elle existe pour le cas qui viendra : une bibliothèque qui a payé,
+        # créé ses prêts, puis RÉSILIÉ. Ses prêts restent en base — c'est
+        # voulu, on n'efface pas l'historique de quelqu'un qui part — et sans
+        # cette ligne, La Bibli continuerait d'écrire à ses membres en son nom,
+        # indéfiniment, sans que personne ne facture ni ne surveille.
+        rapport.sans_abonnement = True
+        return rapport
 
     rapport.prevus = grouper_par_membre(prets_a_relancer(organization, at=at))
 
@@ -362,6 +379,7 @@ class RapportRecap:
     desactive: bool = False
     inactive: bool = False
     sans_destinataire: bool = False
+    sans_abonnement: bool = False
     echec: Optional[str] = None
 
 
@@ -475,6 +493,22 @@ def envoyer_le_recapitulatif(organization, at=None, dry_run=False) -> RapportRec
         return rapport
     if not organization.is_active:
         rapport.inactive = True
+        return rapport
+    if not organization.is_subscribed:
+        # 🔴 L'abonnement, décidé par Séraphin le 01/09/2026.
+        #
+        # Aujourd'hui cette garde ne peut RIEN attraper : l'enregistrement d'un
+        # prêt est déjà derrière l'abonnement, donc une bibliothèque qui ne
+        # paie pas n'a aucun prêt, donc aucun retard. Mesuré en production le
+        # même jour : 21 organisations sans abonnement actif, ZÉRO prêt en
+        # cours entre elles toutes.
+        #
+        # ⚠️ Elle existe pour le cas qui viendra : une bibliothèque qui a payé,
+        # créé ses prêts, puis RÉSILIÉ. Ses prêts restent en base — c'est
+        # voulu, on n'efface pas l'historique de quelqu'un qui part — et sans
+        # cette ligne, La Bibli continuerait d'écrire à ses membres en son nom,
+        # indéfiniment, sans que personne ne facture ni ne surveille.
+        rapport.sans_abonnement = True
         return rapport
 
     destinataire = ""

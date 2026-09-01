@@ -125,9 +125,19 @@ class Command(BaseCommand):
         un filtre, pas un interrupteur. Sans ça, la commande deviendrait le
         moyen d'écrire aux membres d'une bibliothèque sans son accord.
         """
-        queryset = Organization.objects.filter(is_active=True).filter(
+        # 🔴 L'abonnement filtre DÈS la sélection, en plus de la garde du
+        # module. Deux fois, comme pour le consentement : c'est ici qu'on évite
+        # de parcourir les prêts d'une bibliothèque qui ne recevra rien, et
+        # c'est là-bas que la règle tient si un autre point d'entrée apparaît.
+        #
+        # ⚠️ `subscription__active` et non la propriété `is_subscribed` : celle-ci
+        # fait une requête PAR organisation, soit trente et une requêtes pour
+        # une sélection que la base sait faire en une.
+        queryset = Organization.objects.filter(
+            is_active=True, subscription__active=True
+        ).filter(
             Q(member_reminders_enabled=True) | Q(librarian_digest_enabled=True)
-        )
+        ).distinct()
         if identifiant is None:
             return list(queryset.select_related("owner").order_by("id"))
 

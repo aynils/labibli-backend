@@ -61,7 +61,11 @@ def create_subscription(organization, active: bool):
         active=active,
         interval="yearly",
         raw_data={},
-        stripe_customer_id="dummy-id",
+        # ⚠️ Unique par organisation : « stripe_customer_id » porte une
+        # contrainte d'unicité, et un identifiant en dur faisait échouer tout
+        # test qui abonne DEUX bibliothèques — ce que fait désormais chaque
+        # montage qui a besoin d'une voisine pour éprouver le cloisonnement.
+        stripe_customer_id=f"dummy-{organization.pk}",
     )
     subscription.save()
     return subscription
