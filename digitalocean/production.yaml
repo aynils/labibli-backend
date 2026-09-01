@@ -111,11 +111,20 @@ jobs:
   # stockage — et les tests de rappels envoient des courriels. Le réglage de
   # test bascule sur locmem, un cache factice, et la même DATABASE_URL, donc la
   # base test_… se crée bien sur la grappe de production, à côté de la vraie.
+  # 🔴 « --keepdb » est imposé par l'hébergeur, pas par un choix de confort. Le
+  # Postgres géré de DigitalOcean interdit de se connecter à la base « postgres »,
+  # dont Django se sert normalement pour SUPPRIMER la base de test. Sans ce
+  # drapeau, il se rabat sur la première base venue — test_db elle-même — et
+  # tombe sur « cannot drop the currently open database ». Éprouvé en vrai le
+  # 01/09/2026 : les 420 tests passaient (OK, skipped=2, 35 s), et le job
+  # échouait AU DÉMONTAGE, après le travail utile. Avec --keepdb, la base est
+  # réutilisée d'un déploiement à l'autre et les migrations manquantes y sont
+  # appliquées.
   # 🔑 Les deux commandes sont dans UN SEUL job, enchaînées par « && », parce
   # que DigitalOcean ne documente nulle part l'ordre de plusieurs PRE_DEPLOY.
   # En deux jobs, rien ne garantit que la barrière se ferme avant que le schéma
   # de production ait déjà changé. Ici, c'est le shell qui garantit l'ordre.
-  run_command: python manage.py test src --noinput --settings=config.settings.tests && python manage.py migrate
+  run_command: python manage.py test src --noinput --keepdb --settings=config.settings.tests && python manage.py migrate
 - envs:
   - key: DISABLE_COLLECTSTATIC
     scope: BUILD_TIME
