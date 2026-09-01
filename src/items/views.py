@@ -157,7 +157,10 @@ class CollectionDetail(generics.RetrieveUpdateDestroyAPIView):
 class CollectionShared(generics.RetrieveAPIView):
     permission_classes = [permissions.AllowAny]
     lookup_field = "slug"
-    queryset = Collection.objects.all()
+    # La vitrine publique est la page la plus servie du produit, et elle lit
+    # l'organisation et sa propriétaire à chaque appel : autant les charger
+    # avec la collection. Le `slug` reste le seul critère de sélection.
+    queryset = Collection.objects.select_related("organization", "organization__owner")
     serializer_class = CollectionSerializer
 
     def get_serializer_context(self):
@@ -181,7 +184,14 @@ class CollectionsList(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return Collection.objects.filter(organization=user.employee_of_organization)
+        # 🔴 Le cloisonnement, c'est ce `filter(organization=...)` pris sur le
+        # jeton — jamais sur un paramètre de requête. Le `select_related` ne
+        # change RIEN à l'ensemble rendu : il ne fait que charger d'avance
+        # l'organisation et sa propriétaire, que le sérialiseur lit pour
+        # `organization`, `organization_email` et `contact_email`.
+        return Collection.objects.filter(
+            organization=user.employee_of_organization
+        ).select_related("organization", "organization__owner")
 
     def perform_create(self, serializer):
         user = self.request.user

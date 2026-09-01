@@ -785,9 +785,19 @@ class FindBookTests(APITestCase):
             self.assertEqual(response.json().get("isbn"), book.get("isbn"))
             self.assertEqual(response.json().get("picture"), book.get("picture"))
 
+    @sort_sur_le_reseau
     def test_get_image_file(self):
-        """
-        Ensure image file is returned
+        """Ensure image file is returned.
+
+        ⚠️ Celui-ci PASSAIT, contrairement aux deux autres, et c'est ce qui l'a
+        fait manquer au premier balayage : on avait cherché les tests qui
+        échouaient au lieu des tests qui sortent. Il télécharge TEST_PICTURE_URL
+        chez images.leslibraires.ca.
+
+        Il est le plus traître des trois : quand le fournisseur ne répond pas,
+        « fetch_image » rend un 404 et l'échec s'affiche « 404 != 200 » — un
+        message qui ne nomme ni le réseau ni leslibraires. Une panne chez eux
+        bloquerait tous les déploiements de l'API derrière une erreur muette.
         """
         authenticate_user(self)
         url = reverse("get_picture_file")

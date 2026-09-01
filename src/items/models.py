@@ -4,6 +4,8 @@ import os
 import pytz as pytz
 from django.conf import settings
 from django.db import models
+from django.db.models import Count, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 from django.utils.timezone import now
 
 # Create your models here.
@@ -45,7 +47,44 @@ class Collection(models.Model):
     slug = models.CharField(max_length=255, unique=False, blank=False, null=False)
 
 
+class BookQuerySet(models.QuerySet):
+    """Le queryset des ouvrages, avec de quoi éviter une requête par ligne."""
+
+    def with_lending_status(self):
+        """Compte les prêts en cours de CHAQUE ouvrage, en une seule requête.
+
+        Sans elle, `Book.status` interroge la table des prêts ouvrage par
+        ouvrage : une page de 24 vignettes, ce sont 24 requêtes de plus, pour
+        une pastille « disponible / emprunté » que la vitrine publique
+        affiche sur chacune.
+
+        ⚠️ Une sous-requête corrélée, et surtout PAS un `Count` joint : la
+        liste porte déjà des jointures (le filtre « disponible », le filtre
+        par catégorie) et un `Count` de plus compterait les lignes du produit
+        cartésien — un chiffre plausible et faux, donc une pastille fausse.
+
+        🔴 Le cloisonnement ne bouge pas : la sous-requête est corrélée sur
+        `book=OuterRef("pk")`, elle ne peut voir que les prêts des ouvrages
+        déjà retenus par le queryset appelant, lequel est cloisonné par
+        organisation.
+        """
+        lendings_en_cours = (
+            Lending.objects.filter(book=OuterRef("pk"), returned_at__isnull=True)
+            .order_by()
+            .values("book")
+            .annotate(total=Count("pk"))
+            .values("total")
+        )
+        return self.annotate(
+            active_lendings_count=Coalesce(
+                Subquery(lendings_en_cours, output_field=models.IntegerField()), 0
+            )
+        )
+
+
 class Book(models.Model):
+    objects = BookQuerySet.as_manager()
+
     organization = models.ForeignKey(to=Organization, on_delete=models.CASCADE)
     created_at = models.DateTimeField(default=now)
     archived = models.BooleanField(default=False)
@@ -68,9 +107,14 @@ class Book(models.Model):
 
     @property
     def status(self):
-        is_borrowed_count = Lending.objects.filter(
-            book=self, returned_at__isnull=True
-        ).count()
+        # `active_lendings_count` est posé par `BookQuerySet.with_lending_status()`
+        # quand la vue en sert toute une page d'un coup. Absent, on retombe sur
+        # la requête d'origine : un ouvrage seul reste correct.
+        is_borrowed_count = getattr(self, "active_lendings_count", None)
+        if is_borrowed_count is None:
+            is_borrowed_count = Lending.objects.filter(
+                book=self, returned_at__isnull=True
+            ).count()
         if is_borrowed_count >= (self.inventory or 1):
             return "borrowed"
         else:

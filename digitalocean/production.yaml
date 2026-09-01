@@ -157,5 +157,29 @@ services:
   instance_count: 1
   instance_size_slug: basic-xxs
   name: labibli-backend-production
-  run_command: gunicorn --workers 3 --timeout 1200 --worker-tmp-dir /dev/shm config.wsgi
+  # 🔑 Des FILS, pas des processus. Trois travailleurs sync ne servaient que
+  # trois requêtes à la fois : la quatrième attendait, alors que les trois
+  # autres ne calculaient pas — elles attendaient Postgres. Le facteur limitant
+  # de cette API est l'entrée-sortie, pas le processeur.
+  #
+  # ⛔ On n'ajoute PAS de travailleurs : l'instance est une basic-xxs, 512 Mio
+  # de RAM et 1 vCPU partagé, et un travailleur Django pèse 100 à 150 Mio.
+  # Trois en occupent déjà 300 à 450 sur 512 ; un quatrième fait tomber
+  # l'application sur un OOM, pas ralentir. Un FIL, lui, partage la mémoire de
+  # son processus : il ne coûte que sa pile.
+  #
+  # 🔴 Le plafond, c'est le budget de connexions Postgres, pas la RAM.
+  # max_connections = 25, dont une dizaine prise par DigitalOcean et le
+  # système : il reste une quinzaine de connexions pour l'application. Comme
+  # CONN_MAX_AGE n'est pas réglé, chaque requête EN VOL tient une connexion,
+  # qu'elle rend en sortant. Le pire cas est donc le nombre de requêtes
+  # simultanées : 3 travailleurs × 4 fils = 12 connexions, jamais plus. Il
+  # reste trois connexions de marge pour le job de migration, la tâche de
+  # rappels et une console. ⛔ Passer à 5 fils, c'est 15 connexions, soit tout
+  # le budget et zéro marge : la panne ne serait pas une lenteur, ce serait un
+  # « too many connections » au premier déploiement.
+  #
+  # « --worker-class gthread » est explicite : gunicorn le déduirait de
+  # « --threads », mais un réglage qu'on lit vaut mieux qu'un réglage déduit.
+  run_command: gunicorn --workers 3 --threads 4 --worker-class gthread --timeout 1200 --worker-tmp-dir /dev/shm config.wsgi
   source_dir: /

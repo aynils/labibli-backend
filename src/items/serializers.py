@@ -28,10 +28,10 @@ class BookSerializer(serializers.ModelSerializer):
 
     isbn = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
-    def to_representation(self, instance):
-        response = super().to_representation(instance)
-        response["categories"] = CategorySerializer(instance.categories, many=True).data
-        return response
+    # ⛔ Pas de `to_representation` qui re-sérialise `instance.categories` : le
+    # champ `categories` déclaré ci-dessus le fait DÉJÀ, et à l'identique. Le
+    # doublon coûtait deux requêtes par ouvrage — 48 sur une page de 24 — pour
+    # écraser un résultat par le même.
 
     def update(self, instance, validated_data):
         categories = validated_data.pop("categories", [])
@@ -101,7 +101,18 @@ class CollectionSerializer(serializers.ModelSerializer):
         query = request.query_params.get("query")
         available = request.query_params.get("available")
         category_ids = request.query_params.getlist("categoryId")
-        queryset = obj.book_set.order_by("-featured", "-created_at")
+        # 🔴 Le cloisonnement est celui de `obj` : `obj.book_set` ne rend que
+        # les ouvrages rattachés À CETTE collection, et une collection
+        # appartient à une organisation. Ni le `select_related` ni les
+        # `prefetch_related` ci-dessous n'élargissent cet ensemble : ils
+        # ramènent en une requête ce que la sérialisation allait chercher
+        # ouvrage par ouvrage.
+        queryset = (
+            obj.book_set.select_related("organization")
+            .prefetch_related("categories", "collections")
+            .with_lending_status()
+            .order_by("-featured", "-created_at")
+        )
         # Archivé vaut caché. La vitrine publique n'a même pas le droit de
         # demander le contraire : un ouvrage sorti de la circulation ne doit
         # pas être proposé à quelqu'un qui ne peut ni l'emprunter, ni savoir
