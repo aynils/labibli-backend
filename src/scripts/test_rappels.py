@@ -591,8 +591,12 @@ class RecapitulatifTests(TestCase):
         corps = self.recapitulatifs()[0].body
         ligne_jeanne = corps[corps.index("Kukum"):corps.index("Nikolski")]
         ligne_yves = corps[corps.index("Nikolski"):]
-        self.assertIn("rappel envoyé au membre", ligne_jeanne)
-        self.assertIn("n'a PAS été prévenu", ligne_yves)
+        # ⚠️ « à la personne » et « prévenue » : le texte est en écriture
+        # inclusive depuis le 01/09/2026, et ce test le tient. Un libellé qui
+        # repart au masculin fera rougir ici — c'est le seul endroit du dépôt
+        # qui empêche la régression, l'œil ayant déjà laissé passer trois fois.
+        self.assertIn("rappel envoyé à la personne", ligne_jeanne)
+        self.assertIn("n'a PAS été prévenue", ligne_yves)
         self.assertIn("aucune adresse courriel", ligne_yves)
 
     def test_DIT_que_les_rappels_aux_membres_sont_ETEINTS(self):
