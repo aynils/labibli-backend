@@ -14,6 +14,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
         # sans nouvel aller-retour côté API.
         fields = [
             "name",
+            "contact_email",
             "id",
             "owner",
             "is_subscribed",

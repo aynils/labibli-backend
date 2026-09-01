@@ -72,3 +72,36 @@ class InscriptionTests(APITestCase):
         reponse = self.inscrire()
         self.assertEqual(reponse.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Organization.objects.filter(name=NOM_PAR_DEFAUT).count(), 1)
+
+
+class AdresseDeContactTests(APITestCase):
+    """L'adresse PUBLIQUE de la bibliothèque, distincte de celle du compte."""
+
+    def test_une_nouvelle_bibliotheque_part_avec_une_adresse_de_contact(self):
+        """Sans quoi sa vitrine ne dirait à personne à qui s'adresser."""
+        self.client.post(
+            reverse("signup"),
+            {"email": "neuve@exemple.test", "password": "un-mot-de-passe-solide",
+             "organization_name": "Alliance de Saint-Quentin"},
+        )
+        organisation = User.objects.get(email="neuve@exemple.test").employee_of_organization
+        self.assertEqual(organisation.contact_email, "neuve@exemple.test")
+
+    def test_elle_se_change_SANS_toucher_a_l_adresse_du_compte(self):
+        """🔑 Tout l'intérêt du champ : la vitrine cesse de publier l'adresse
+        de connexion de la propriétaire dès qu'elle en choisit une autre."""
+        self.client.post(
+            reverse("signup"),
+            {"email": "proprietaire@exemple.test", "password": "un-mot-de-passe-solide"},
+        )
+        utilisateur = User.objects.get(email="proprietaire@exemple.test")
+        organisation = utilisateur.employee_of_organization
+        organisation.contact_email = "bibliotheque@saint-quentin.test"
+        organisation.save()
+
+        utilisateur.refresh_from_db()
+        self.assertEqual(utilisateur.email, "proprietaire@exemple.test")
+        self.assertEqual(
+            Organization.objects.get(pk=organisation.pk).contact_email,
+            "bibliotheque@saint-quentin.test",
+        )

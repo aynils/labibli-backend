@@ -24,6 +24,18 @@ class Organization(models.Model):
     created_at = models.DateTimeField(default=now)
     name = models.CharField(max_length=255, unique=False, blank=False, null=False)
     owner = models.ForeignKey(to=User, on_delete=models.DO_NOTHING)
+    # 🔴 L'adresse PUBLIQUE de la bibliothèque, distincte de celle du compte.
+    #
+    # La vitrine dit « pour emprunter, adressez-vous à la bibliothèque » et
+    # donnait jusqu'ici l'adresse de connexion de la propriétaire — son adresse
+    # personnelle, publiée sur une page ouverte à tous. Les deux servent à des
+    # choses opposées : l'une identifie une personne, l'autre est faite pour
+    # être lue par des inconnus.
+    #
+    # ⚠️ Elle est initialisée avec celle de la propriétaire pour que l'emprunt
+    # continue de fonctionner. Ça n'efface donc pas l'exposition — ça la rend
+    # DÉLIBÉRÉE et modifiable, ce qu'elle n'était pas.
+    contact_email = models.EmailField(max_length=255, blank=True, null=True)
 
     # ── Les rappels de retard : DEUX destinataires, DEUX interrupteurs ───
     #
@@ -124,7 +136,15 @@ NOM_PAR_DEFAUT = "Ma bibliothèque"
 def create_organization(sender, instance, created, **kwargs):
     if created:
         organization = Organization.objects.create(
-            name=NOM_PAR_DEFAUT, owner=instance
+            name=NOM_PAR_DEFAUT,
+            owner=instance,
+            # ⚠️ Sans adresse de contact, la vitrine ne dit à personne à qui
+            # s'adresser pour emprunter — elle devient un catalogue à regarder.
+            # On part donc de celle du compte, comme la migration l'a fait pour
+            # l'existant, et la bibliothèque en choisit une autre quand elle
+            # veut. ⛔ Ce n'est pas un alias : c'est une COPIE, pour que changer
+            # l'une ne touche jamais l'autre.
+            contact_email=instance.email,
         )
         instance.employee_of_organization = organization
         instance.save()

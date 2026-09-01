@@ -88,7 +88,12 @@ class BookSerializer(serializers.ModelSerializer):
 
 class CollectionSerializer(serializers.ModelSerializer):
     organization = serializers.ReadOnlyField(source="organization.name")
+    # ⚠️ Conservé le temps qu'aucun navigateur ne serve plus l'ancien bundle :
+    # la modale d'emprunt le lisait. ⏳ À RETIRER — c'est l'adresse personnelle
+    # de la propriétaire, et elle part à qui appelle l'API publique.
     organization_email = serializers.ReadOnlyField(source="organization.owner.email")
+    # L'adresse que la bibliothèque a CHOISI de rendre publique.
+    contact_email = serializers.ReadOnlyField(source="organization.contact_email")
     books = serializers.SerializerMethodField("paginated_books")
 
     def paginated_books(self, obj):
@@ -170,6 +175,7 @@ class CollectionSerializer(serializers.ModelSerializer):
             "books",
             "slug",
             "organization_email",
+            "contact_email",
         ]
 
 
