@@ -40,7 +40,15 @@ from src.items.models import Book, Category, Collection
 BUDGET_REQUETES = 7
 
 
-class NombreDeRequetesCollectionsTests(APITestCase):
+class DecorBibliotheque:
+    """Le décor partagé : une bibliothèque, une voisine, des ouvrages.
+
+    ⚠️ C'est un mixin, PAS une classe de tests. Faire hériter une classe de
+    tests d'une autre rejouerait tous ses tests sous le second nom : un seul
+    défaut s'afficherait alors deux fois, et le compte total mentirait.
+    """
+
+
     @classmethod
     def setUpTestData(cls):
         cls.user = create_user()
@@ -91,6 +99,10 @@ class NombreDeRequetesCollectionsTests(APITestCase):
         livre.collections.add(cls.collection)
         livre.categories.add(cls.categorie)
         return livre
+
+
+class NombreDeRequetesCollectionsTests(DecorBibliotheque, APITestCase):
+    """Le point d'API qui sert « Mon compte » ET la vitrine publique."""
 
     def test_le_nombre_de_requetes_tient_dans_le_budget(self):
         authenticate_user(self)
@@ -143,3 +155,55 @@ class NombreDeRequetesCollectionsTests(APITestCase):
                 "La collection d'une AUTRE bibliothèque est ressortie.",
             )
             self.assertEqual(livre["organization"], self.organization.name)
+
+
+# Même mesure, sur « /api/items/books/ » : l'écran « Livres », le plus utilisé
+# du produit. Il faisait 100 requêtes pour 24 vignettes.
+#   1. le jeton et la personne qui le porte ;
+#   2. son organisation, pour le contrôle d'accès ;
+#   3. le COUNT de la pagination ;
+#   4. la page d'ouvrages, organisation jointe et prêts en cours en
+#      sous-requête corrélée ;
+#   5. les catégories de la page, d'un coup ;
+#   6. les collections de la page, d'un coup.
+BUDGET_REQUETES_LIVRES = 6
+
+
+class NombreDeRequetesLivresTests(DecorBibliotheque, APITestCase):
+    """Même décor, autre point d'API."""
+
+    def test_la_liste_des_livres_ne_depend_pas_du_nombre_de_livres(self):
+        authenticate_user(self)
+        url = reverse("list_post_books")
+
+        with self.assertNumQueries(BUDGET_REQUETES_LIVRES):
+            self.client.get(url)
+
+        # ⚠️ C'est CE test qui rattrape un N+1 réintroduit : le budget doit
+        # rester constant quand la bibliothèque triple de taille.
+        for index in range(6, 18):
+            self.ajouter_livre(index)
+
+        with self.assertNumQueries(BUDGET_REQUETES_LIVRES):
+            reponse = self.client.get(url)
+        self.assertEqual(len(reponse.data["results"]), 18)
+
+    def test_les_livres_de_la_voisine_ne_ressortent_pas(self):
+        """🔴 Le cloisonnement, sur l'écran le plus consulté."""
+        authenticate_user(self)
+        reponse = self.client.get(reverse("list_post_books"))
+
+        titres = [livre["title"] for livre in reponse.data["results"]]
+        for livre in reponse.data["results"]:
+            self.assertEqual(livre["organization"], self.organization.name)
+            noms = [categorie["name"] for categorie in livre["categories"]]
+            self.assertNotIn(
+                "Catégorie de la voisine",
+                noms,
+                "Une catégorie d'une AUTRE bibliothèque est ressortie.",
+            )
+        self.assertNotIn(
+            "Le livre de la voisine",
+            titres,
+            "Un ouvrage d'une AUTRE bibliothèque est ressorti.",
+        )

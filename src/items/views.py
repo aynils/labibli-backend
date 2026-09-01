@@ -57,9 +57,23 @@ class BooksList(generics.ListCreateAPIView):
         query = self.request.query_params.get("query")
         available = self.request.query_params.get("available")
         category_ids = self.request.query_params.getlist("categoryId")
-        queryset = Book.objects.filter(
-            organization=user.employee_of_organization
-        ).order_by("-featured", "-created_at")
+        # 🔴 Le cloisonnement, c'est ce `filter(organization=...)` pris sur le
+        # jeton. Les chargements d'avance qui suivent ne l'élargissent PAS :
+        # `select_related` joint l'organisation déjà retenue, les
+        # `prefetch_related` sont bornés par les identifiants des ouvrages de
+        # la page, et `with_lending_status` est une sous-requête corrélée.
+        #
+        # Sans eux, la sérialisation repartait chercher, pour CHAQUE ouvrage,
+        # ses catégories, ses collections, son organisation et le compte de ses
+        # prêts : 100 requêtes pour 24 vignettes, sur l'écran le plus utilisé
+        # du produit.
+        queryset = (
+            Book.objects.filter(organization=user.employee_of_organization)
+            .select_related("organization")
+            .prefetch_related("categories", "collections")
+            .with_lending_status()
+            .order_by("-featured", "-created_at")
+        )
         if query:
             queryset = queryset.filter(
                 Q(title__unaccent__icontains=query)
