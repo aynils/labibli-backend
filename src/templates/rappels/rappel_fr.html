@@ -18,7 +18,7 @@
     {% endfor %}
 </ul>
 <p>
-    Si {% if lendings|length > 1 %}ces livres ont{% else %}ce livre a{% endif %} déjà été rendu,
+    Si {% if lendings|length > 1 %}ces livres ont déjà été rendus{% else %}ce livre a déjà été rendu{% endif %},
     ce message n'appelle aucune réponse.
 </p>
 <p>Merci,<br>{{ organization.name }}</p>

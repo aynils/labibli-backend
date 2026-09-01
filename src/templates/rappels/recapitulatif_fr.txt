@@ -1,13 +1,22 @@
-{% load dates_fr %}Bonjour{% if organization.owner.first_name %} {{ organization.owner.first_name }}{% endif %},
+{% autoescape off %}{% comment %}
+🔴 Django échappe le HTML par DÉFAUT, y compris dans un gabarit .txt. Sans
+`autoescape off`, « La ballade d'Ali Baba » part en « La ballade d&#x27;Ali
+Baba » — dans un courriel en texte brut, où rien ne le désinterprète. La
+personne lit littéralement ça, et un titre sur trois porte une apostrophe.
+
+⚠️ Et ce commentaire est en `{% comment %}` et non en `{# … #}` : la seconde
+forme est MONO-LIGNE chez Django. Écrite sur cinq lignes, elle ne commente
+rien — elle s'imprime dans le courriel. C'est arrivé ici même.
+{% endcomment %}{% load dates_fr %}Bonjour{% if organization.owner.first_name %} {{ organization.owner.first_name }}{% endif %},
 
 Au {{ at|date_fr }}, {% if lendings|length > 1 %}{{ lendings|length }} prêts en retard atteignent une étape de relance{% else %}un prêt en retard atteint une étape de relance{% endif %} à {{ organization.name }}.
 {% for lending in lendings %}
   {{ lending.days_late }} j — « {{ lending.title }} »{% if lending.author %}, {{ lending.author }}{% endif %}
        {{ lending.customer }}{% if lending.email %} — {{ lending.email }}{% elif lending.phone %} — {{ lending.phone }}{% endif %}
        à rendre le {{ lending.due_at|date_fr }}{% if lending.step_days == dernier_palier %} — dernière relance automatique{% endif %}
-       {% if lending.membre_prevenu %}✓ rappel envoyé au membre{% else %}⚠️ le membre n'a PAS été prévenu{% if lending.archived %} (fiche archivée){% elif not lending.email %} (aucune adresse courriel){% elif not member_reminders_enabled %} (rappels aux membres désactivés){% endif %}{% endif %}
+       {% if lending.membre_prevenu %}✓ rappel envoyé à la personne{% else %}⚠️ la personne n'a PAS été prévenue{% if lending.archived %} (fiche archivée){% elif not lending.email %} (aucune adresse courriel){% elif not member_reminders_enabled %} (rappels aux membres désactivés){% endif %}{% endif %}
 {% endfor %}
-{% if injoignables %}{{ injoignables|length }} de ces {% if injoignables|length > 1 %}personnes sont{% else %}personne est{% endif %} hors d'atteinte de l'envoi automatique : {% if injoignables|length > 1 %}elles ne seront relancées{% else %}elle ne sera relancée{% endif %} que par vous.
+{% if injoignables %}{% if injoignables|length > 1 %}{{ injoignables|length }} de ces personnes sont{% else %}Une de ces personnes est{% endif %} hors d'atteinte de l'envoi automatique : {% if injoignables|length > 1 %}elles ne seront relancées{% else %}elle ne sera relancée{% endif %} que par vous.
 {% endif %}
 Vous ne recevez ce courriel que les jours où une relance a lieu. La liste
 complète de vos retards reste consultable à tout moment dans « Prêts ».
@@ -18,3 +27,4 @@ La Bibli
 —
 Pour ne plus recevoir ces relances, désactivez-les dans « Mon compte →
 Notifications ».
+{% endautoescape %}

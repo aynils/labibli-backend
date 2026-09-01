@@ -1,4 +1,13 @@
-Hello {{ customer.first_name }},
+{% autoescape off %}{% comment %}
+🔴 Django échappe le HTML par DÉFAUT, y compris dans un gabarit .txt. Sans
+`autoescape off`, « La ballade d'Ali Baba » part en « La ballade d&#x27;Ali
+Baba » — dans un courriel en texte brut, où rien ne le désinterprète. La
+personne lit littéralement ça, et un titre sur trois porte une apostrophe.
+
+⚠️ Et ce commentaire est en `{% comment %}` et non en `{# … #}` : la seconde
+forme est MONO-LIGNE chez Django. Écrite sur cinq lignes, elle ne commente
+rien — elle s'imprime dans le courriel. C'est arrivé ici même.
+{% endcomment %}Hello {{ customer.first_name }},
 
 {% if lendings|length > 1 %}{{ lendings|length }} of the books you borrowed from {{ organization.name }} are past their return date:{% else %}The book you borrowed from {{ organization.name }} is past its return date:{% endif %}
 {% for lending in lendings %}
@@ -13,3 +22,4 @@ Thank you,
 —
 This reminder was sent automatically by La Bibli on behalf of
 {{ organization.name }}. Reply to this email to reach the library.
+{% endautoescape %}

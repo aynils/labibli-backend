@@ -39,9 +39,9 @@
         <td>{{ lending.due_at|date_fr }}</td>
         <td>
             {% if lending.membre_prevenu %}
-                ✓ rappel envoyé au membre
+                ✓ rappel envoyé à la personne
             {% else %}
-                ⚠️ le membre n'a <strong>pas</strong> été prévenu{% if lending.archived %} (fiche archivée){% elif not lending.email %} (aucune adresse courriel){% elif not member_reminders_enabled %} (rappels aux membres désactivés){% endif %}
+                ⚠️ la personne n'a <strong>pas</strong> été prévenue{% if lending.archived %} (fiche archivée){% elif not lending.email %} (aucune adresse courriel){% elif not member_reminders_enabled %} (rappels aux membres désactivés){% endif %}
             {% endif %}
             {% if lending.step_days == dernier_palier %}<br><em>dernière relance automatique</em>{% endif %}
         </td>
@@ -51,8 +51,8 @@
 </table>
 {% if injoignables %}
 <p>
-    {{ injoignables|length }} de ces
-    {% if injoignables|length > 1 %}personnes sont{% else %}personne est{% endif %}
+    {% if injoignables|length > 1 %}{{ injoignables|length }} de ces personnes sont
+    {% else %}Une de ces personnes est{% endif %}
     hors d'atteinte de l'envoi automatique :
     {% if injoignables|length > 1 %}elles ne seront relancées{% else %}elle ne sera relancée{% endif %}
     que par vous.

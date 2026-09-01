@@ -1,11 +1,20 @@
-{% load dates_fr %}Bonjour {{ customer.first_name }},
+{% autoescape off %}{% comment %}
+🔴 Django échappe le HTML par DÉFAUT, y compris dans un gabarit .txt. Sans
+`autoescape off`, « La ballade d'Ali Baba » part en « La ballade d&#x27;Ali
+Baba » — dans un courriel en texte brut, où rien ne le désinterprète. La
+personne lit littéralement ça, et un titre sur trois porte une apostrophe.
+
+⚠️ Et ce commentaire est en `{% comment %}` et non en `{# … #}` : la seconde
+forme est MONO-LIGNE chez Django. Écrite sur cinq lignes, elle ne commente
+rien — elle s'imprime dans le courriel. C'est arrivé ici même.
+{% endcomment %}{% load dates_fr %}Bonjour {{ customer.first_name }},
 
 {% if lendings|length > 1 %}La date de retour de {{ lendings|length }} de vos emprunts à {{ organization.name }} est passée :{% else %}La date de retour de votre emprunt à {{ organization.name }} est passée :{% endif %}
 {% for lending in lendings %}
   - « {{ lending.title }} »{% if lending.author %}, {{ lending.author }}{% endif %}
     à rendre le {{ lending.due_at|date_fr }}
 {% endfor %}
-Si {% if lendings|length > 1 %}ces livres ont{% else %}ce livre a{% endif %} déjà été rendu, ce message n'appelle aucune réponse.
+Si {% if lendings|length > 1 %}ces livres ont déjà été rendus{% else %}ce livre a déjà été rendu{% endif %}, ce message n'appelle aucune réponse.
 
 Merci,
 {{ organization.name }}
@@ -13,3 +22,4 @@ Merci,
 —
 Ce rappel est envoyé automatiquement par La Bibli pour le compte de
 {{ organization.name }}. Répondez à ce courriel pour joindre la bibliothèque.
+{% endautoescape %}
