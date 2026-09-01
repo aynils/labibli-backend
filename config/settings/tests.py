@@ -40,6 +40,12 @@ TEMPLATES[-1]["OPTIONS"]["loaders"] = [  # type: ignore[index] # noqa F405
 # https://docs.djangoproject.com/en/dev/ref/settings/#email-backend
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
+# `path_and_rename` (src/items/models.py) nomme le dossier des couvertures à
+# partir de cette valeur. Sans elle, TOUT enregistrement d'image lève une
+# AttributeError en test — ce qui rendait intestable la moitié de ce qui
+# touche aux couvertures.
+DJANGO_ENV = "TEST"
+
 # DATABASE
 # ------------------------------------------------------------------------------
 DATABASES = {

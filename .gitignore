@@ -18,3 +18,5 @@ build/
 tests/report/
 /src/static/
 /media/covers/
+# Couvertures écrites par la suite de tests (DJANGO_ENV=TEST les préfixe).
+/media/TEST-covers/
