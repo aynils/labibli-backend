@@ -172,6 +172,43 @@ class ImportFileCommandTests(TestCase):
         self.assertIn("Kukum", output)
         self.assertIn(self.seconde_organisation.name, output)
 
+    def test_a_blanc_n_ecrit_RIEN_et_le_dit(self, lookup, resolve):
+        """Le contrôle qu'on lance AVANT de réimporter pour de bon."""
+        output = self.call(xlsx_path(self.rows, self.directory),
+                           organization=self.seconde_organisation.id, dry_run=True)
+        self.assertEqual(Book.objects.count(), 0)
+        self.assertIn("À BLANC", output)
+        self.assertIn("rien n'a été écrit", output)
+        # ⚠️ Un mode à blanc n'interroge aucun catalogue : il ne peut donc pas
+        # promettre qu'une ligne neuve trouvera sa notice, et ne le prétend pas.
+        resolve.assert_not_called()
+        lookup.assert_not_called()
+
+    def test_complete_une_fiche_deja_la_au_lieu_de_la_sauter(self, lookup, resolve):
+        """Le réimport d'un fichier enrichi, qui ne produisait rien avant."""
+        Book.objects.create(
+            organization=self.seconde_organisation, title="Kukum", author="Michel Jean",
+        )
+        output = self.call(xlsx_path(self.rows, self.directory),
+                           organization=self.seconde_organisation.id, no_enrich=True)
+        book = Book.objects.get()
+        self.assertEqual(book.publisher, "Libre Expression")
+        self.assertRegex(output, r"complétés\s+1")
+        # ⛔ Et surtout : pas de seconde fiche. C'est le doublon que la clé
+        # faible évite — l'éditeur ajouté ne fait plus un autre ouvrage.
+        self.assertEqual(Book.objects.count(), 1)
+
+    def test_sans_completer_retrouve_le_comportement_d_avant(self, lookup, resolve):
+        Book.objects.create(
+            organization=self.seconde_organisation, title="Kukum", author="Michel Jean",
+        )
+        output = self.call(xlsx_path(self.rows, self.directory),
+                           organization=self.seconde_organisation.id,
+                           no_enrich=True, sans_completer=True)
+        book = Book.objects.get()
+        self.assertIsNone(book.publisher)
+        self.assertRegex(output, r"doublons\s+1")
+
     def test_n_interroge_aucun_catalogue_avec_no_enrich(self, lookup, resolve):
         self.call(xlsx_path(self.rows, self.directory),
                   organization=self.seconde_organisation.id, no_enrich=True)

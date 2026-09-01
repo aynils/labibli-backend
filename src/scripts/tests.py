@@ -511,8 +511,13 @@ class ImportCustomersTests(APITestCase):
         self.assertEqual(customer.last_name, "COUTURE")
         self.assertEqual(customer.email, "josette.couture@example.com")
 
-    def test_saute_un_membre_deja_inscrit(self):
-        Customer.objects.create(
+    def test_ne_REINSCRIT_pas_un_membre_deja_la_et_complete_sa_fiche(self):
+        """La garantie de ce test n'a pas changé : la personne n'entre pas deux
+        fois. Ce qui a changé le 01/09/2026, c'est ce qu'on fait de la ligne —
+        elle était jetée, elle complète maintenant les champs vides. Le
+        téléphone que la bibliothèque a collecté depuis entre enfin.
+        """
+        customer = Customer.objects.create(
             organization=self.organization, first_name="Josette", last_name="COUTURE",
             email="josette.couture@example.com",
         )
@@ -520,12 +525,15 @@ class ImportCustomersTests(APITestCase):
         response = self.client.post(
             self.url, {"file": csv_upload(csv), "kind": "customers"}, format="multipart"
         )
-        self.assertEqual(response.json()["status"]["duplicates_count"], 1)
+        # 🔑 L'assertion qui compte, et qui n'a pas bougé.
         self.assertEqual(Customer.objects.filter(organization=self.organization).count(), 1)
+        self.assertEqual(response.json()["status"]["updated_count"], 1)
+        customer.refresh_from_db()
+        self.assertEqual(customer.phone, "613-601-2441")
 
-    def test_saute_un_membre_reconnu_par_son_telephone(self):
+    def test_reconnait_un_membre_par_son_TELEPHONE_et_complete_son_courriel(self):
         """`unique_together` reconnaît un membre par courriel OU téléphone."""
-        Customer.objects.create(
+        customer = Customer.objects.create(
             organization=self.organization, first_name="Josette", last_name="COUTURE",
             phone="613-601-2441",
         )
@@ -533,7 +541,11 @@ class ImportCustomersTests(APITestCase):
         response = self.client.post(
             self.url, {"file": csv_upload(csv), "kind": "customers"}, format="multipart"
         )
-        self.assertEqual(response.json()["status"]["duplicates_count"], 1)
+        self.assertEqual(Customer.objects.filter(organization=self.organization).count(), 1)
+        self.assertEqual(response.json()["status"]["updated_count"], 1)
+        customer.refresh_from_db()
+        # Le courriel était vide : il se comble. Il n'aurait PAS été remplacé.
+        self.assertEqual(customer.email, "autre@example.com")
 
     def test_saute_un_membre_sans_courriel_ni_telephone(self):
         """Sans clé de repli, ceux-là n'étaient jamais vus comme doublons et

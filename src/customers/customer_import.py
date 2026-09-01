@@ -11,10 +11,15 @@ réimporter une liste corrigée crée un second exemplaire de chaque personne.
 """
 from src.customers.membership import find_archived
 from src.customers.models import Customer
-from src.imports.runner import Importer
+from src.imports.runner import Importer, fill_blanks
 from src.helpers.text_matching import normalize
 
 COLUMNS = ("first_name", "last_name", "email", "phone", "language", "note")
+
+# Ce qu'un réimport peut COMBLER sur une fiche déjà inscrite.
+# ⛔ Ni prénom ni nom : ce sont des clés de dédoublonnage, et `build` les
+# exige — ils ne sont jamais vides sur une fiche atteinte par `merge`.
+MERGEABLE = ("email", "phone", "language", "note")
 
 
 def name_key(first_name, last_name, value, kind) -> str:
@@ -67,25 +72,46 @@ class CustomerImporter(Importer):
             record.get("email"), record.get("phone"),
         )
 
-    def existing_keys(self, organization_id) -> set:
+    def existing_objects(self, organization_id) -> dict:
         """Les membres déjà inscrits dans CETTE organisation, en une requête.
 
-        Les fiches RETIRÉES en sont exclues à dessein. Les compter comme
-        doublons ferait qu'une bibliothèque ayant retiré quelqu'un par
+        Les fiches ARCHIVÉES en sont exclues à dessein. Les compter comme
+        doublons ferait qu'une bibliothèque ayant archivé quelqu'un par
         erreur, puis réimportant sa liste, verrait la personne rangée en
         « doublon » et rester invisible — une perte silencieuse de plus.
         `build` s'occupe de la réinscrire.
+
+        🔴 Le filtre porte l'organisation : deux bibliothèques peuvent avoir
+        une adhérente du même nom sans rien partager.
         """
-        rows = Customer.objects.filter(
+        index = {}
+        for customer in Customer.objects.filter(
             organization_id=organization_id, archived=False
-        ).values_list(
-            "first_name", "last_name", "email", "phone"
-        )
-        keys = set()
-        for first_name, last_name, email, phone in rows:
-            keys.update(keys_for(first_name, last_name, email, phone))
+        ):
+            for key in keys_for(
+                customer.first_name, customer.last_name, customer.email, customer.phone
+            ):
+                index.setdefault(key, customer)
         self.load_removed(organization_id)
-        return keys
+        return index
+
+    def merge(self, existing, record, dry_run=False):
+        """Complète une fiche déjà inscrite avec ce que le fichier ajoute.
+
+        Le cas ordinaire : la liste part sans les téléphones, ils sont
+        collectés au fil de l'année, et le fichier revient enrichi. Avant le
+        01/09/2026 ce second envoi ne produisait rien du tout.
+
+        Courriel et téléphone sont des clés de dédoublonnage, mais elles ne
+        sont pas obligatoires — une fiche peut n'avoir ni l'un ni l'autre, et
+        c'est justement celle-là qu'il faut pouvoir compléter.
+        """
+        remplis, ecarts = fill_blanks(existing, record, MERGEABLE, dry_run=dry_run)
+        if dry_run:
+            return remplis, ecarts
+        if remplis:
+            existing.save()
+        return remplis, ecarts
 
     def load_removed(self, organization_id) -> None:
         """Les fiches retirées de CETTE organisation, en une requête."""
@@ -132,18 +158,28 @@ class CustomerImporter(Importer):
         # dédoublonnable, et `Customer` refuse les deux champs vides.
         if not record.get("first_name") or not record.get("last_name"):
             return None
-        # Une fiche retirée occupe encore sa place au regard de
+        # Une fiche archivée occupe encore sa place au regard de
         # `unique_together` : la réinscrire est la seule issue qui ne rende
         # pas une erreur d'unicité Postgres à la bibliothèque.
-        customer = self.take_removed(record, organization_id) or Customer(
-            organization_id=organization_id
-        )
+        archivee = self.take_removed(record, organization_id)
+        customer = archivee or Customer(organization_id=organization_id)
         customer.archived = False
         customer.first_name = record["first_name"]
         customer.last_name = record["last_name"]
-        customer.email = record.get("email")
-        customer.phone = record.get("phone")
-        customer.language = record.get("language")
-        customer.note = record.get("note")
+        if archivee is None:
+            # Création : il n'y a rien à écraser, le fichier fait foi.
+            customer.email = record.get("email")
+            customer.phone = record.get("phone")
+            customer.language = record.get("language")
+            customer.note = record.get("note")
+        else:
+            # ⛔ Réinscription : la fiche existe et porte peut-être plus que
+            # le fichier. L'affectation directe VIDAIT ses champs quand le
+            # tableur ne les portait pas — une note de suivi écrite dans
+            # l'application disparaissait au réimport de la liste, en
+            # silence, et la personne réapparaissait sans son historique de
+            # contact. Même règle que partout ailleurs : on ne comble que
+            # les vides.
+            fill_blanks(customer, record, MERGEABLE)
         customer.save()
         return customer

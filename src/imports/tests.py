@@ -11,7 +11,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase
 
 from src.imports.readers import MAX_UPLOAD_BYTES, ImportFileError, read_rows
-from src.imports.runner import Importer, ImportReport, run_import
+from src.imports.runner import Importer, ImportReport, fill_blanks, run_import
 
 BOOK_COLUMNS = ("isbn", "title", "author", "publisher")
 CUSTOMER_COLUMNS = ("first_name", "last_name", "email", "phone")
@@ -122,11 +122,30 @@ class ReadRowsTests(SimpleTestCase):
         self.assertEqual(rows[0]["last_name"], "COUTURÉ")
 
 
+class Fiche:
+    """Un objet d'essai, avec des attributs comme un modèle Django."""
+
+    def __init__(self, name, **champs):
+        self.name = name
+        for champ, valeur in champs.items():
+            setattr(self, champ, valeur)
+
+
 class FakeImporter(Importer):
-    """Un importateur d'essai : il retient ce qu'on lui donne."""
+    """Un importateur d'essai : il retient ce qu'on lui donne.
+
+    Il ne sait rien compléter — c'est le `merge` par défaut du socle. Les
+    tests du complément se servent de `CompletingImporter`.
+    """
 
     def __init__(self, existing=(), refuse=(), explose=()):
-        self.existing = set(existing)
+        # Les objets déjà en base, indexés par clé. `existing` accepte une
+        # simple liste de noms : le test qui ne s'intéresse pas au contenu
+        # de la fiche n'a pas à en fabriquer une.
+        self.existing = (
+            dict(existing) if isinstance(existing, dict)
+            else {name: Fiche(name) for name in existing}
+        )
         self.refuse = set(refuse)
         self.explose = set(explose)
         self.built = []
@@ -137,8 +156,8 @@ class FakeImporter(Importer):
     def dedupe_keys(self, record):
         return [record["name"]]
 
-    def existing_keys(self, organization_id):
-        return self.existing
+    def existing_objects(self, organization_id):
+        return dict(self.existing)
 
     def build(self, record, organization_id):
         if record["name"] in self.explose:
@@ -146,7 +165,18 @@ class FakeImporter(Importer):
         if record["name"] in self.refuse:
             return None
         self.built.append((record["name"], organization_id))
-        return record
+        return Fiche(record["name"], **{
+            champ: valeur for champ, valeur in record.items() if champ != "name"
+        })
+
+
+class CompletingImporter(FakeImporter):
+    """Le même, qui sait combler ses champs vides — comme les deux vrais."""
+
+    CHAMPS = ("editeur", "cote")
+
+    def merge(self, existing, record, dry_run=False):
+        return fill_blanks(existing, record, self.CHAMPS, dry_run=dry_run)
 
 
 class RunImportTests(SimpleTestCase):

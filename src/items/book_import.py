@@ -21,7 +21,7 @@ Trois principes en découlent :
 from django.core.files.base import ContentFile
 from django.db import transaction
 
-from src.imports.runner import AlreadyPresent, Importer
+from src.imports.runner import AlreadyPresent, Importer, fill_blanks
 from src.items.book_lookup import (
     download_image,
     find_book_details,
@@ -39,6 +39,14 @@ COLUMNS = (
     # « archived » vient APRÈS « location », pour la même raison.
     "isbn", "title", "author", "publisher", "published_year", "lang",
     "category", "cover_url", "description", "location", "archived",
+)
+
+# Les champs qu'un réimport peut COMBLER quand ils sont vides.
+# ⛔ `title` n'en fait pas partie : c'est une clé de dédoublonnage, une fiche
+# sans titre n'atteint jamais cette branche. `picture`, `categories` et
+# `archived` ont chacun leur règle propre, dans `merge`.
+MERGEABLE = (
+    "isbn", "author", "publisher", "published_year", "lang", "location", "description",
 )
 
 # Ce qu'une cellule peut dire pour signifier « oui ». Les fichiers viennent de
@@ -88,11 +96,40 @@ def title_key(title, author, publisher) -> str:
 
 
 def dedupe_keys(isbn, title, author, publisher) -> list:
-    """Les deux façons de reconnaître un ouvrage déjà présent.
+    """Les façons de RECHERCHER un ouvrage déjà présent, par ordre de force.
 
-    Les deux clés sont produites, pas une seule : un catalogue bâti par
+    Les trois clés sont produites, pas une seule : un catalogue bâti par
     ISBN et un inventaire sans ISBN doivent se reconnaître mutuellement,
     sinon réimporter l'inventaire duplique tout le catalogue.
+
+    🔴 La troisième — titre + auteur, SANS l'éditeur — répare un doublon réel
+    de production. L'éditeur est entré dans la clé le 30/08 pour distinguer
+    deux éditions du même titre, et il le fait bien ; mais du coup une ligne
+    qui AJOUTE l'éditeur d'une fiche qui n'en avait pas ne la reconnaissait
+    plus, et en créait une seconde. C'est le cas le plus banal qui soit : une
+    bibliothécaire complète son tableau et le renvoie. Trois doublons de ce
+    type ont été écrits en production le 31/08.
+
+    ⚠️ La clé faible sert à CHERCHER, jamais à indexer — voir `index_keys`.
+    Sans cette dissymétrie, les deux éditions que le 30/08 avait séparées se
+    refondraient en une.
+    """
+    keys = [isbn_key(isbn), title_key(title, author, publisher)]
+    if publisher:
+        keys.append(title_key(title, author, None))
+    return [key for key in keys if key]
+
+
+def index_keys(isbn, title, author, publisher) -> list:
+    """Les clés sous lesquelles on RANGE un ouvrage déjà écrit.
+
+    L'ouvrage qui porte un éditeur n'est PAS rangé sous la clé faible : deux
+    éditions du même titre garderaient sinon une clé commune, et la seconde
+    viendrait compléter la première au lieu d'exister. C'est exactement le
+    défaut que la clé forte a été introduite pour corriger.
+
+    Un ouvrage SANS éditeur, lui, n'est rangé que sous la clé faible — sa clé
+    forte est la même, l'éditeur y étant vide.
     """
     return [key for key in (isbn_key(isbn), title_key(title, author, publisher)) if key]
 
@@ -119,15 +156,142 @@ class BookImporter(Importer):
             record.get("author"), record.get("publisher"),
         )
 
-    def existing_keys(self, organization_id) -> set:
-        """Les ouvrages déjà catalogués par CETTE organisation, en une requête."""
-        rows = Book.objects.filter(organization_id=organization_id).values_list(
-            "isbn", "title", "author", "publisher"
-        )
-        keys = set()
-        for isbn, title, author, publisher in rows:
-            keys.update(dedupe_keys(isbn, title, author, publisher))
-        return keys
+    def existing_objects(self, organization_id) -> dict:
+        """Les ouvrages déjà catalogués par CETTE organisation, en une requête.
+
+        🔴 Le filtre porte l'organisation, et c'est tout ce qui sépare une
+        collection d'une autre : sans lui, un réimport complèterait la fiche
+        d'une bibliothèque avec la donnée de sa voisine, sans qu'aucune
+        erreur ne le signale.
+
+        Les objets sont chargés en entier, et non plus les seules colonnes de
+        dédoublonnage : on ne peut pas compléter une fiche qu'on n'a pas.
+        Sur les 3 000 titres du plafond annoncé de la reprise, l'index tient
+        sans difficulté ; au-delà, `--limit` existe déjà.
+
+        `setdefault` et non l'affectation : quand deux fiches partagent une
+        clé — cela arrive, `Category` n'est pas la seule table du dépôt sans
+        contrainte réelle — c'est la première qui garde la main, pour que
+        deux exécutions sur la même base fassent la même chose.
+        """
+        index = {}
+        for book in Book.objects.filter(organization_id=organization_id):
+            for key in index_keys(book.isbn, book.title, book.author, book.publisher):
+                index.setdefault(key, book)
+        return index
+
+    def same(self, existing, record) -> bool:
+        """Le titre tranche quand la clé se trompe.
+
+        🔴 Six ISBN de la collection de Siem Reap désignent plusieurs fiches :
+        « Durandal 1 », « Durandal 2 » et « Durandal 3 » portent tous l'ISBN
+        du tome 1, hérité d'une résolution par titre. Sans ce contrôle, le
+        réimport écrirait l'éditeur et l'année d'un tome sur un autre — une
+        donnée plausible et fausse, qui ne lève rien.
+
+        ⚠️ Une ligne SANS titre est acceptée : un fichier d'ISBN nus est un
+        format légitime, c'est celui de l'Alliance Française d'Ottawa, et il
+        n'a rien à comparer.
+        """
+        du_fichier = record.get("title")
+        if not du_fichier:
+            return True
+        return normalize(du_fichier) == normalize(existing.title)
+
+    def merge(self, existing, record, dry_run=False):
+        """Complète un ouvrage déjà catalogué avec ce que le fichier ajoute.
+
+        ⛔ Rien de ce qui est déjà rempli ne bouge, et rien ne se retire :
+        pas une catégorie, pas une couverture, pas l'état archivé. Le fichier
+        ne peut qu'AJOUTER.
+
+        ⛔ Et le complément ne sort pas sur le réseau. Chercher une notice
+        est le métier de `manage.py enrichir`, qui part de la base et sait
+        s'arrêter quand les catalogues ne répondent plus. Ici on ne se sert
+        que de ce que le fichier porte : sans quoi un réimport de 3 000
+        lignes relancerait 3 000 interrogations à l'insu de qui l'a lancé.
+        """
+        remplis, ecarts = fill_blanks(existing, record, MERGEABLE, dry_run=dry_run)
+
+        # `archived` est un booléen : il est TOUJOURS rempli, donc jamais
+        # comblé. Une divergence se signale et ne s'applique pas — désarchiver
+        # tout un fonds parce qu'un tableur n'a pas la colonne serait la
+        # perte la plus spectaculaire que ce code puisse causer.
+        annonce = record.get("archived")
+        if annonce not in (None, "") and is_archived(annonce) != existing.archived:
+            ecarts.append({
+                "field": "archived",
+                "existing": existing.archived,
+                "file": is_archived(annonce),
+            })
+
+        # 🔑 UN SEUL point de sortie sans écriture, et il est ici. Avoir la
+        # même garde à quatre endroits paraît prudent : en réalité aucune
+        # n'est alors éprouvable, puisque retirer l'une laisse les trois
+        # autres retenir l'écriture. La mutation l'a montré le 01/09 — deux
+        # gardes « à blanc » survivaient toutes les deux.
+        ajoutees = self.categories_a_ajouter(existing, record)
+        if ajoutees:
+            remplis["categories"] = ajoutees
+        if self.couverture_a_poser(existing, record):
+            remplis["picture"] = record.get("cover_url")
+
+        if dry_run:
+            return remplis, ecarts
+
+        if remplis:
+            existing.save()
+        if ajoutees:
+            self.attach_category(
+                existing, CATEGORY_SEPARATOR.join(ajoutees), existing.organization_id
+            )
+        if "picture" in remplis and not self.poser_couverture(existing, record):
+            # Le catalogue n'a pas rendu l'image : on ne l'annonce pas.
+            remplis.pop("picture")
+
+        return remplis, ecarts
+
+    def categories_a_ajouter(self, book, record) -> list:
+        """Les catégories du fichier que l'ouvrage n'a pas encore.
+
+        Purement additif : une catégorie retirée du tableur reste sur la
+        fiche. Un rayonnage se range dans l'application, pas dans le fichier
+        qui a servi à la reprise il y a six mois.
+
+        Ne décide pas, ne range rien : sans quoi le mode à blanc devrait avoir
+        sa garde ici aussi.
+        """
+        name = record.get("category")
+        if not name:
+            return []
+        deja = {existing.name for existing in book.categories.all()}
+        return [
+            single.strip()
+            for single in str(name).split(CATEGORY_SEPARATOR)
+            if single.strip() and single.strip() not in deja
+        ]
+
+    def couverture_a_poser(self, book, record) -> bool:
+        """Vrai si le fichier propose une couverture et que la fiche n'en a pas.
+
+        🔴 La garde est ici, AVANT tout téléchargement : une bibliothèque a pu
+        photographier son propre exemplaire, ou remplacer la jaquette d'une
+        autre édition. C'est la perte la plus visible qu'on puisse lui
+        infliger, et un mutant l'a déjà démontrée sur `enrichir`.
+        """
+        return bool(record.get("cover_url")) and not book.picture
+
+    def poser_couverture(self, book, record) -> bool:
+        """Télécharge et pose la couverture. N'est appelée qu'après la garde."""
+        try:
+            image = download_image(url=record["cover_url"])
+        except Exception:
+            # Une couverture manquante n'invalide pas un ouvrage catalogué.
+            return False
+        if not image:
+            return False
+        book.picture.save(name=book.title, content=ContentFile(image), save=True)
+        return True
 
     @transaction.atomic
     def build(self, record, organization_id):
@@ -220,14 +384,17 @@ class BookImporter(Importer):
             return None
 
     def created_keys(self, created) -> list:
-        """Les clés de l'ouvrage écrit, ISBN retrouvé compris.
+        """Les clés sous lesquelles ranger l'ouvrage écrit, ISBN retrouvé compris.
 
         Deux titres du même auteur peuvent se voir attribuer le MÊME ISBN par
         la résolution — « Astérix le Gaulois » et « Le petit Nicolas » chez
         Goscinny. Sans ces clés, le second entrait en collision avec le
         premier à l'intérieur d'un seul fichier.
+
+        ⚠️ `index_keys` et non `dedupe_keys` : on range sous les clés fortes,
+        on ne cherche que sous les faibles.
         """
-        return dedupe_keys(created.isbn, created.title, created.author, created.publisher)
+        return index_keys(created.isbn, created.title, created.author, created.publisher)
 
     def resolve(self, record):
         """Retrouve l'ISBN par le titre et l'auteur, si on nous y autorise."""
